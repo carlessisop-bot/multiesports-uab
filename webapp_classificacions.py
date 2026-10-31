@@ -715,6 +715,41 @@ with tab_arbitre:
     if pwd_input == PASSWORD_ARBITRE:
         st.success("Sessió d'Àrbitre Validada amb Èxit! ⚽")
         
+        st.markdown("---")
+        st.markdown("#### 📁 Gestió & Sincronització de l'Excel Central com a Còpia Local")
+        st.caption("Baixa el fitxer Excel Central amb totes les dades acumulades fins al moment (resultats, classificacions, golejadors i registre d'assistències) per treballar-hi localment o executar les macros VBA.")
+        
+        col_ex_dl, col_ex_up = st.columns([1, 1])
+        
+        with col_ex_dl:
+            excel_file_path = obtenir_fitxer_excel()
+            if os.path.exists(excel_file_path):
+                with open(excel_file_path, "rb") as f_ex:
+                    excel_bytes_master = f_ex.read()
+                st.download_button(
+                    label="💾 Baixar Excel Central (.xlsx) al teu Escriptori",
+                    data=excel_bytes_master,
+                    file_name="Plantilla_MultiEsports_UAB.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_download_master_excel"
+                )
+            else:
+                st.error("No s'ha trobat el fitxer Excel Central.")
+                
+        with col_ex_up:
+            uploaded_excel = st.file_uploader("Carregar nou Excel Central per actualitzar dades:", type=["xlsx", "xlsm"], key="uploader_master_excel")
+            if uploaded_excel is not None:
+                if st.button("🔄 Sobreescriure i Aplicar Canvis a la WebApp"):
+                    try:
+                        target_file = obtenir_fitxer_excel()
+                        with open(target_file, "wb") as f_out:
+                            f_out.write(uploaded_excel.getbuffer())
+                        st.success("Fitxer Excel Central actualitzat correctament a la WebApp!")
+                        st.rerun()
+                    except Exception as e_up:
+                        st.error(f"Error en sobreescriure l'Excel: {e_up}")
+        st.markdown("---")
+        
         if not df_cal.empty:
             df_pendents = df_cal[~df_cal["EstatPartit"].astype(str).str.strip().str.upper().isin(["VALIDAT"])]
             
