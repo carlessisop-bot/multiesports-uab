@@ -47,7 +47,7 @@ st.markdown("""<div class="main-title">MultiEsports UAB — SAF Servei d'Activit
 st.markdown("""<div class="sub-title">Portal Públic de Resultats & Panell d'Àrbitres</div>""", unsafe_allow_html=True)
 
 PASSWORD_ARBITRE = "UAB2026"          # Contrasenya per defecte per als àrbitres/coordinadors
-PASSWORD_SUPERADMIN = "SUPERADMIN2026" # Contrasenya de Superadministrador (Excel Central)
+PASSWORD_SUPERADMIN = "GEEKOM2026" # Contrasenya de Superadministrador (Excel Central)
 
 # ==========================================
 # 2. FUNCIONS AUXILIARS I DE SEGURETAT
