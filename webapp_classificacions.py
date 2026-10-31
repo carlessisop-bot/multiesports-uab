@@ -159,7 +159,7 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
     try:
         import openpyxl
         
-        wb = openpyxl.load_workbook(excel_file, keep_vba=True)
+        wb = openpyxl.load_workbook(excel_file, keep_vba=excel_file.lower().endswith('.xlsm'))
         if "Calendari" not in wb.sheetnames:
             return False, "No s'ha trobat el full 'Calendari' a l'Excel."
             
@@ -715,39 +715,44 @@ with tab_arbitre:
     if pwd_input == PASSWORD_ARBITRE:
         st.success("Sessió d'Àrbitre Validada amb Èxit! ⚽")
         
+        # -------------------------------------------------------------
+        # SECCIÓ DE DESCARREGA I CÀRREGA DE L'EXCEL CENTRAL
+        # -------------------------------------------------------------
         st.markdown("---")
         st.markdown("#### 📁 Gestió & Sincronització de l'Excel Central com a Còpia Local")
-        st.caption("Baixa el fitxer Excel Central amb totes les dades acumulades fins al moment (resultats, classificacions, golejadors i registre d'assistències) per treballar-hi localment o executar les macros VBA.")
         
-        col_ex_dl, col_ex_up = st.columns([1, 1])
-        
-        with col_ex_dl:
-            excel_file_path = obtenir_fitxer_excel()
-            if os.path.exists(excel_file_path):
-                with open(excel_file_path, "rb") as f_ex:
-                    excel_bytes_master = f_ex.read()
+        excel_file_path = obtenir_fitxer_excel()
+        if os.path.exists(excel_file_path):
+            with open(excel_file_path, "rb") as f_ex:
+                excel_bytes_data = f_ex.read()
+                
+            is_xlsm_ext = excel_file_path.lower().endswith(".xlsm")
+            mime_type_str = "application/vnd.ms-excel.sheet.macroEnabled.12" if is_xlsm_ext else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            
+            c_ex1, c_ex2 = st.columns([1, 1])
+            with c_ex1:
                 st.download_button(
                     label="💾 Baixar Excel Central (.xlsx) al teu Escriptori",
-                    data=excel_bytes_master,
-                    file_name="Plantilla_MultiEsports_UAB.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="btn_download_master_excel"
+                    data=excel_bytes_data,
+                    file_name=os.path.basename(excel_file_path),
+                    mime=mime_type_str,
+                    key="btn_download_excel_central_master"
                 )
-            else:
-                st.error("No s'ha trobat el fitxer Excel Central.")
+                st.caption("ℹ️ Descarrega el fitxer Excel oficial amb tots els resultats, classificacions i assistències registrades.")
                 
-        with col_ex_up:
-            uploaded_excel = st.file_uploader("Carregar nou Excel Central per actualitzar dades:", type=["xlsx", "xlsm"], key="uploader_master_excel")
-            if uploaded_excel is not None:
-                if st.button("🔄 Sobreescriure i Aplicar Canvis a la WebApp"):
-                    try:
-                        target_file = obtenir_fitxer_excel()
-                        with open(target_file, "wb") as f_out:
-                            f_out.write(uploaded_excel.getbuffer())
-                        st.success("Fitxer Excel Central actualitzat correctament a la WebApp!")
+            with c_ex2:
+                uploaded_master = st.file_uploader(
+                    "📤 Actualitzar / Carregar Excel des de l'Escriptori:",
+                    type=["xlsx", "xlsm"],
+                    key="uploader_excel_master"
+                )
+                if uploaded_master is not None:
+                    if st.button("🔄 Sobreescriure Base de Dades Excel a la WebApp"):
+                        target_save = uploaded_master.name
+                        with open(target_save, "wb") as f_out:
+                            f_out.write(uploaded_master.getbuffer())
+                        st.success(f"S'ha actualitzat el fitxer '{target_save}' a la WebApp amb èxit!")
                         st.rerun()
-                    except Exception as e_up:
-                        st.error(f"Error en sobreescriure l'Excel: {e_up}")
         st.markdown("---")
         
         if not df_cal.empty:
