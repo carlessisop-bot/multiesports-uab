@@ -711,7 +711,7 @@ with tab_fairplay:
 with tab_arbitre:
     st.markdown("### 🔐 Accés Restringit per a Àrbitres i Organització")
     
-    pwd_input = st.text_input("Introdueix la contrasenya d'accés:", type="password", help="Contrasenya Àrbitre: UAB2026 | Contrasenya Superadmin: SUPERADMIN2026")
+    pwd_input = st.text_input("Introdueix la contrasenya d'accés:", type="password", help="Contrasenya Àrbitre: UAB2026 | Contrasenya Superadmin: GEEKOM2026")
     
     is_arbitre = (pwd_input == PASSWORD_ARBITRE)
     is_superadmin = (pwd_input == PASSWORD_SUPERADMIN)
