@@ -210,7 +210,7 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
             return False, f"No s'ha trobat el partit amb ID '{id_partit}' al Calendari."
             
         # 2. Gravació d'Assistències al full 'Assistencies'
-        headers_ass = ["IdPartit", "IdParticipant", "NomJugador", "Competició", "Equip", "Assisteix", "DataRegistre"]
+        headers_ass = ["IdPartit", "IdParticipant", "NomJugador", "Competició", "Equip", "Assisteix", "DataRegistre", "Gols", "Groga", "Vermella"]
         if "Assistencies" not in wb.sheetnames:
             ws_ass = wb.create_sheet("Assistencies")
         else:
@@ -232,7 +232,14 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
         def _inserir_files_assistencia(llista_assist, nom_equip):
             items = llista_assist.items() if isinstance(llista_assist, dict) else llista_assist
             for item in items:
-                if isinstance(item, tuple) and len(item) == 2:
+                p_gols, p_groga, p_vermella = 0, 0, 0
+                if isinstance(item, dict):
+                    jug_info = item.get("jug", {})
+                    assist = item.get("assist", True)
+                    p_gols = item.get("gols", 0)
+                    p_groga = item.get("groga", 0)
+                    p_vermella = item.get("vermella", 0)
+                elif isinstance(item, tuple) and len(item) == 2:
                     jug_info, assist = item
                 else:
                     continue
@@ -249,6 +256,9 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
                 ws_ass.cell(row=r_next, column=5, value=str(nom_equip))
                 ws_ass.cell(row=r_next, column=6, value=1 if assist else 0)
                 ws_ass.cell(row=r_next, column=7, value=now_str)
+                ws_ass.cell(row=r_next, column=8, value=safe_int(p_gols))
+                ws_ass.cell(row=r_next, column=9, value=safe_int(p_groga))
+                ws_ass.cell(row=r_next, column=10, value=safe_int(p_vermella))
                 
         _inserir_files_assistencia(assistencies_loc, eq_loc)
         _inserir_files_assistencia(assistencies_vis, eq_vis)
@@ -807,18 +817,40 @@ with tab_arbitre:
                     with ca_loc:
                         st.markdown(f"##### 📋 Convocatòria {p_eq_loc}")
                         if jugadors_loc:
+                            h1, h2, h3, h4, h5 = st.columns([3, 1.2, 1, 1, 1])
+                            h1.caption("**Jugador/a**")
+                            h2.caption("**Assisteix**")
+                            h3.caption("**Gols**")
+                            h4.caption("**🟨 Groga**")
+                            h5.caption("**🟥 Vermella**")
                             for idx_j, jug in enumerate(jugadors_loc):
-                                chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_loc_{p_id}_{idx_j}")
-                                ass_loc_list.append((jug, chk))
+                                c1, c2, c3, c4, c5 = st.columns([3, 1.2, 1, 1, 1])
+                                c1.write(f"**{jug['nom']}**")
+                                chk = c2.checkbox("", value=True, key=f"chk_loc_{p_id}_{idx_j}", label_visibility="collapsed")
+                                p_g = c3.number_input("", min_value=0, max_value=20, value=0, step=1, key=f"gols_loc_{p_id}_{idx_j}", label_visibility="collapsed")
+                                p_gr = c4.number_input("", min_value=0, max_value=2, value=0, step=1, key=f"groga_loc_{p_id}_{idx_j}", label_visibility="collapsed")
+                                p_ve = c5.number_input("", min_value=0, max_value=1, value=0, step=1, key=f"vermella_loc_{p_id}_{idx_j}", label_visibility="collapsed")
+                                ass_loc_list.append({"jug": jug, "assist": chk, "gols": p_g, "groga": p_gr, "vermella": p_ve})
                         else:
                             st.caption("No s'ha trobat llista de jugadors per a aquest equip al full Consolidat.")
                             
                     with ca_vis:
                         st.markdown(f"##### 📋 Convocatòria {p_eq_vis}")
                         if jugadors_vis:
+                            h1, h2, h3, h4, h5 = st.columns([3, 1.2, 1, 1, 1])
+                            h1.caption("**Jugador/a**")
+                            h2.caption("**Assisteix**")
+                            h3.caption("**Gols**")
+                            h4.caption("**🟨 Groga**")
+                            h5.caption("**🟥 Vermella**")
                             for idx_j, jug in enumerate(jugadors_vis):
-                                chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_vis_{p_id}_{idx_j}")
-                                ass_vis_list.append((jug, chk))
+                                c1, c2, c3, c4, c5 = st.columns([3, 1.2, 1, 1, 1])
+                                c1.write(f"**{jug['nom']}**")
+                                chk = c2.checkbox("", value=True, key=f"chk_vis_{p_id}_{idx_j}", label_visibility="collapsed")
+                                p_g = c3.number_input("", min_value=0, max_value=20, value=0, step=1, key=f"gols_vis_{p_id}_{idx_j}", label_visibility="collapsed")
+                                p_gr = c4.number_input("", min_value=0, max_value=2, value=0, step=1, key=f"groga_vis_{p_id}_{idx_j}", label_visibility="collapsed")
+                                p_ve = c5.number_input("", min_value=0, max_value=1, value=0, step=1, key=f"vermella_vis_{p_id}_{idx_j}", label_visibility="collapsed")
+                                ass_vis_list.append({"jug": jug, "assist": chk, "gols": p_g, "groga": p_gr, "vermella": p_ve})
                         else:
                             st.caption("No s'ha trobat llista de jugadors per a aquest equip al full Consolidat.")
                             
@@ -826,11 +858,34 @@ with tab_arbitre:
                     submitted = st.form_submit_button("💾 Validar Acta, Desar Assistències i Actualitzar Classificació")
                     
                     if submitted:
+                        loc_p_g = sum(item["gols"] for item in ass_loc_list if isinstance(item, dict))
+                        loc_p_gr = sum(item["groga"] for item in ass_loc_list if isinstance(item, dict))
+                        loc_p_ve = sum(item["vermella"] for item in ass_loc_list if isinstance(item, dict))
+                        
+                        vis_p_g = sum(item["gols"] for item in ass_vis_list if isinstance(item, dict))
+                        vis_p_gr = sum(item["groga"] for item in ass_vis_list if isinstance(item, dict))
+                        vis_p_ve = sum(item["vermella"] for item in ass_vis_list if isinstance(item, dict))
+                        
+                        gols_loc_f = max(gols_loc, loc_p_g)
+                        gols_vis_f = max(gols_vis, vis_p_g)
+                        tg_loc_f = max(t_grogues_loc, loc_p_gr)
+                        tg_vis_f = max(t_grogues_vis, vis_p_gr)
+                        tv_loc_f = max(t_vermelles_loc, loc_p_ve)
+                        tv_vis_f = max(t_vermelles_vis, vis_p_ve)
+                        
+                        gol_loc_txt_f = golejadors_loc
+                        if not gol_loc_txt_f.strip() and loc_p_g > 0:
+                            gol_loc_txt_f = ", ".join([f"{item['jug']['nom']} ({item['gols']})" for item in ass_loc_list if isinstance(item, dict) and item["gols"] > 0])
+                            
+                        gol_vis_txt_f = golejadors_vis
+                        if not gol_vis_txt_f.strip() and vis_p_g > 0:
+                            gol_vis_txt_f = ", ".join([f"{item['jug']['nom']} ({item['gols']})" for item in ass_vis_list if isinstance(item, dict) and item["gols"] > 0])
+                            
                         ok, msg = guardar_acta_amb_assistencies(
                             p_id, p_esport, p_eq_loc, p_eq_vis,
-                            gols_loc, gols_vis,
-                            t_grogues_loc, t_vermelles_loc, t_grogues_vis, t_vermelles_vis,
-                            golejadors_loc, golejadors_vis,
+                            gols_loc_f, gols_vis_f,
+                            tg_loc_f, tv_loc_f, tg_vis_f, tv_vis_f,
+                            gol_loc_txt_f, gol_vis_txt_f,
                             ass_loc_list, ass_vis_list
                         )
                         if ok:
