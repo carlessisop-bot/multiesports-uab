@@ -46,7 +46,8 @@ st.markdown("""
 st.markdown("""<div class="main-title">MultiEsports UAB — SAF Servei d'Activitat Física</div>""", unsafe_allow_html=True)
 st.markdown("""<div class="sub-title">Portal Públic de Resultats & Panell d'Àrbitres</div>""", unsafe_allow_html=True)
 
-PASSWORD_ARBITRE = "UAB2026"  # Contrasenya per defecte per als àrbitres/coordinadors
+PASSWORD_ARBITRE = "UAB2026"          # Contrasenya per defecte per als àrbitres/coordinadors
+PASSWORD_SUPERADMIN = "SUPERADMIN2026" # Contrasenya de Superadministrador (Excel Central)
 
 # ==========================================
 # 2. FUNCIONS AUXILIARS I DE SEGURETAT
@@ -210,7 +211,7 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
             return False, f"No s'ha trobat el partit amb ID '{id_partit}' al Calendari."
             
         # 2. Gravació d'Assistències al full 'Assistencies'
-        headers_ass = ["IdPartit", "IdParticipant", "NomJugador", "Competició", "Equip", "Assisteix", "DataRegistre", "Gols", "Groga", "Vermella"]
+        headers_ass = ["IdPartit", "IdParticipant", "NomJugador", "Competició", "Equip", "Assisteix", "DataRegistre"]
         if "Assistencies" not in wb.sheetnames:
             ws_ass = wb.create_sheet("Assistencies")
         else:
@@ -232,14 +233,7 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
         def _inserir_files_assistencia(llista_assist, nom_equip):
             items = llista_assist.items() if isinstance(llista_assist, dict) else llista_assist
             for item in items:
-                p_gols, p_groga, p_vermella = 0, 0, 0
-                if isinstance(item, dict):
-                    jug_info = item.get("jug", {})
-                    assist = item.get("assist", True)
-                    p_gols = item.get("gols", 0)
-                    p_groga = item.get("groga", 0)
-                    p_vermella = item.get("vermella", 0)
-                elif isinstance(item, tuple) and len(item) == 2:
+                if isinstance(item, tuple) and len(item) == 2:
                     jug_info, assist = item
                 else:
                     continue
@@ -256,9 +250,6 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
                 ws_ass.cell(row=r_next, column=5, value=str(nom_equip))
                 ws_ass.cell(row=r_next, column=6, value=1 if assist else 0)
                 ws_ass.cell(row=r_next, column=7, value=now_str)
-                ws_ass.cell(row=r_next, column=8, value=safe_int(p_gols))
-                ws_ass.cell(row=r_next, column=9, value=safe_int(p_groga))
-                ws_ass.cell(row=r_next, column=10, value=safe_int(p_vermella))
                 
         _inserir_files_assistencia(assistencies_loc, eq_loc)
         _inserir_files_assistencia(assistencies_vis, eq_vis)
@@ -720,49 +711,73 @@ with tab_fairplay:
 with tab_arbitre:
     st.markdown("### 🔐 Accés Restringit per a Àrbitres i Organització")
     
-    pwd_input = st.text_input("Introdueix la contrasenya d'accés:", type="password", help="Contrasenya per defecte: UAB2026")
+    pwd_input = st.text_input("Introdueix la contrasenya d'accés:", type="password", help="Contrasenya Àrbitre: UAB2026 | Contrasenya Superadmin: SUPERADMIN2026")
     
-    if pwd_input == PASSWORD_ARBITRE:
-        st.success("Sessió d'Àrbitre Validada amb Èxit! ⚽")
+    is_arbitre = (pwd_input == PASSWORD_ARBITRE)
+    is_superadmin = (pwd_input == PASSWORD_SUPERADMIN)
+    
+    if is_arbitre or is_superadmin:
+        if is_superadmin:
+            st.success("Sessió de Superadministrador Validada amb Èxit! 👑")
+        else:
+            st.success("Sessió d'Àrbitre Validada amb Èxit! ⚽")
         
         # -------------------------------------------------------------
-        # SECCIÓ DE DESCARREGA I CÀRREGA DE L'EXCEL CENTRAL
+        # SECCIÓ DE DESCARREGA I CÀRREGA DE L'EXCEL CENTRAL (RESERVAT SUPERADMIN)
         # -------------------------------------------------------------
         st.markdown("---")
-        st.markdown("#### 📁 Gestió & Sincronització de l'Excel Central com a Còpia Local")
+        st.markdown("#### 📁 Gestió & Sincronització de l'Excel Central (Només Superadministrador)")
         
-        excel_file_path = obtenir_fitxer_excel()
-        if os.path.exists(excel_file_path):
-            with open(excel_file_path, "rb") as f_ex:
-                excel_bytes_data = f_ex.read()
+        unlocked_excel = is_superadmin
+        if not is_superadmin:
+            pwd_superadmin = st.text_input(
+                "🔑 Introdueix la contrasenya de Superadministrador per baixar/pujar l'Excel Central:",
+                type="password",
+                key="pwd_superadmin_sub",
+                help="Contrasenya de Superadministrador: SUPERADMIN2026"
+            )
+            if pwd_superadmin == PASSWORD_SUPERADMIN:
+                unlocked_excel = True
+                st.success("Accés de Superadministrador Concedit! 🔓")
+            elif pwd_superadmin != "":
+                st.error("Contrasenya de Superadministrador incorrecta.")
+        
+        if unlocked_excel:
+            excel_file_path = obtenir_fitxer_excel()
+            if os.path.exists(excel_file_path):
+                with open(excel_file_path, "rb") as f_ex:
+                    excel_bytes_data = f_ex.read()
+                    
+                is_xlsm_ext = excel_file_path.lower().endswith(".xlsm")
+                mime_type_str = "application/vnd.ms-excel.sheet.macroEnabled.12" if is_xlsm_ext else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 
-            is_xlsm_ext = excel_file_path.lower().endswith(".xlsm")
-            mime_type_str = "application/vnd.ms-excel.sheet.macroEnabled.12" if is_xlsm_ext else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                c_ex1, c_ex2 = st.columns([1, 1])
+                with c_ex1:
+                    st.download_button(
+                        label="💾 Baixar Excel Central (.xlsx) al teu Escriptori",
+                        data=excel_bytes_data,
+                        file_name=os.path.basename(excel_file_path),
+                        mime=mime_type_str,
+                        key="btn_download_excel_central_master"
+                    )
+                    st.caption("ℹ️ Descarrega el fitxer Excel oficial amb tots els resultats, classificacions i assistències registrades.")
+                    
+                with c_ex2:
+                    uploaded_master = st.file_uploader(
+                        "📤 Actualitzar / Carregar Excel des de l'Escriptori:",
+                        type=["xlsx", "xlsm"],
+                        key="uploader_excel_master"
+                    )
+                    if uploaded_master is not None:
+                        if st.button("🔄 Sobreescriure Base de Dades Excel a la WebApp"):
+                            target_save = uploaded_master.name
+                            with open(target_save, "wb") as f_out:
+                                f_out.write(uploaded_master.getbuffer())
+                            st.success(f"S'ha actualitzat el fitxer '{target_save}' a la WebApp amb èxit!")
+                            st.rerun()
+        else:
+            st.info("🔒 La descàrrega i càrrega de l'Excel Central està reservada exclusivament al Superadministrador. Introdueix la contrasenya de Superadmin a dalt per desblocat-ho.")
             
-            c_ex1, c_ex2 = st.columns([1, 1])
-            with c_ex1:
-                st.download_button(
-                    label="💾 Baixar Excel Central (.xlsx) al teu Escriptori",
-                    data=excel_bytes_data,
-                    file_name=os.path.basename(excel_file_path),
-                    mime=mime_type_str,
-                    key="btn_download_excel_central_master"
-                )
-                st.caption("ℹ️ Descarrega el fitxer Excel oficial amb tots els resultats, classificacions i assistències registrades.")
-                
-            with c_ex2:
-                uploaded_master = st.file_uploader(
-                    "📤 Actualitzar / Carregar Excel des de l'Escriptori:",
-                    type=["xlsx", "xlsm"],
-                    key="uploader_excel_master"
-                )
-                if uploaded_master is not None:
-                    if st.button("🔄 Sobreescriure Base de Dades Excel a la WebApp"):
-                        target_save = uploaded_master.name
-                        with open(target_save, "wb") as f_out:
-                            f_out.write(uploaded_master.getbuffer())
-                        st.success(f"S'ha actualitzat el fitxer '{target_save}' a la WebApp amb èxit!")
-                        st.rerun()
         st.markdown("---")
         
         if not df_cal.empty:
@@ -817,40 +832,18 @@ with tab_arbitre:
                     with ca_loc:
                         st.markdown(f"##### 📋 Convocatòria {p_eq_loc}")
                         if jugadors_loc:
-                            h1, h2, h3, h4, h5 = st.columns([3, 1.2, 1, 1, 1])
-                            h1.caption("**Jugador/a**")
-                            h2.caption("**Assisteix**")
-                            h3.caption("**Gols**")
-                            h4.caption("**🟨 Groga**")
-                            h5.caption("**🟥 Vermella**")
                             for idx_j, jug in enumerate(jugadors_loc):
-                                c1, c2, c3, c4, c5 = st.columns([3, 1.2, 1, 1, 1])
-                                c1.write(f"**{jug['nom']}**")
-                                chk = c2.checkbox("", value=True, key=f"chk_loc_{p_id}_{idx_j}", label_visibility="collapsed")
-                                p_g = c3.number_input("", min_value=0, max_value=20, value=0, step=1, key=f"gols_loc_{p_id}_{idx_j}", label_visibility="collapsed")
-                                p_gr = c4.number_input("", min_value=0, max_value=2, value=0, step=1, key=f"groga_loc_{p_id}_{idx_j}", label_visibility="collapsed")
-                                p_ve = c5.number_input("", min_value=0, max_value=1, value=0, step=1, key=f"vermella_loc_{p_id}_{idx_j}", label_visibility="collapsed")
-                                ass_loc_list.append({"jug": jug, "assist": chk, "gols": p_g, "groga": p_gr, "vermella": p_ve})
+                                chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_loc_{p_id}_{idx_j}")
+                                ass_loc_list.append((jug, chk))
                         else:
                             st.caption("No s'ha trobat llista de jugadors per a aquest equip al full Consolidat.")
                             
                     with ca_vis:
                         st.markdown(f"##### 📋 Convocatòria {p_eq_vis}")
                         if jugadors_vis:
-                            h1, h2, h3, h4, h5 = st.columns([3, 1.2, 1, 1, 1])
-                            h1.caption("**Jugador/a**")
-                            h2.caption("**Assisteix**")
-                            h3.caption("**Gols**")
-                            h4.caption("**🟨 Groga**")
-                            h5.caption("**🟥 Vermella**")
                             for idx_j, jug in enumerate(jugadors_vis):
-                                c1, c2, c3, c4, c5 = st.columns([3, 1.2, 1, 1, 1])
-                                c1.write(f"**{jug['nom']}**")
-                                chk = c2.checkbox("", value=True, key=f"chk_vis_{p_id}_{idx_j}", label_visibility="collapsed")
-                                p_g = c3.number_input("", min_value=0, max_value=20, value=0, step=1, key=f"gols_vis_{p_id}_{idx_j}", label_visibility="collapsed")
-                                p_gr = c4.number_input("", min_value=0, max_value=2, value=0, step=1, key=f"groga_vis_{p_id}_{idx_j}", label_visibility="collapsed")
-                                p_ve = c5.number_input("", min_value=0, max_value=1, value=0, step=1, key=f"vermella_vis_{p_id}_{idx_j}", label_visibility="collapsed")
-                                ass_vis_list.append({"jug": jug, "assist": chk, "gols": p_g, "groga": p_gr, "vermella": p_ve})
+                                chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_vis_{p_id}_{idx_j}")
+                                ass_vis_list.append((jug, chk))
                         else:
                             st.caption("No s'ha trobat llista de jugadors per a aquest equip al full Consolidat.")
                             
@@ -858,34 +851,11 @@ with tab_arbitre:
                     submitted = st.form_submit_button("💾 Validar Acta, Desar Assistències i Actualitzar Classificació")
                     
                     if submitted:
-                        loc_p_g = sum(item["gols"] for item in ass_loc_list if isinstance(item, dict))
-                        loc_p_gr = sum(item["groga"] for item in ass_loc_list if isinstance(item, dict))
-                        loc_p_ve = sum(item["vermella"] for item in ass_loc_list if isinstance(item, dict))
-                        
-                        vis_p_g = sum(item["gols"] for item in ass_vis_list if isinstance(item, dict))
-                        vis_p_gr = sum(item["groga"] for item in ass_vis_list if isinstance(item, dict))
-                        vis_p_ve = sum(item["vermella"] for item in ass_vis_list if isinstance(item, dict))
-                        
-                        gols_loc_f = max(gols_loc, loc_p_g)
-                        gols_vis_f = max(gols_vis, vis_p_g)
-                        tg_loc_f = max(t_grogues_loc, loc_p_gr)
-                        tg_vis_f = max(t_grogues_vis, vis_p_gr)
-                        tv_loc_f = max(t_vermelles_loc, loc_p_ve)
-                        tv_vis_f = max(t_vermelles_vis, vis_p_ve)
-                        
-                        gol_loc_txt_f = golejadors_loc
-                        if not gol_loc_txt_f.strip() and loc_p_g > 0:
-                            gol_loc_txt_f = ", ".join([f"{item['jug']['nom']} ({item['gols']})" for item in ass_loc_list if isinstance(item, dict) and item["gols"] > 0])
-                            
-                        gol_vis_txt_f = golejadors_vis
-                        if not gol_vis_txt_f.strip() and vis_p_g > 0:
-                            gol_vis_txt_f = ", ".join([f"{item['jug']['nom']} ({item['gols']})" for item in ass_vis_list if isinstance(item, dict) and item["gols"] > 0])
-                            
                         ok, msg = guardar_acta_amb_assistencies(
                             p_id, p_esport, p_eq_loc, p_eq_vis,
-                            gols_loc_f, gols_vis_f,
-                            tg_loc_f, tv_loc_f, tg_vis_f, tv_vis_f,
-                            gol_loc_txt_f, gol_vis_txt_f,
+                            gols_loc, gols_vis,
+                            t_grogues_loc, t_vermelles_loc, t_grogues_vis, t_vermelles_vis,
+                            golejadors_loc, golejadors_vis,
                             ass_loc_list, ass_vis_list
                         )
                         if ok:
