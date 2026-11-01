@@ -110,22 +110,16 @@ def carregar_jugadors_equip(esport, equip):
     if df_cons.empty:
         return []
     
-    cols = list(df_cons.columns)
-    
-    # 1. Columna de Competició / Esport
+    cols = df_cons.columns
     col_comp = next((c for c in cols if "competi" in c.lower() or "esport" in c.lower()), cols[0])
+    col_eq = next((c for c in cols if "equip" in c.lower()), cols[1] if len(cols)>1 else cols[0])
     
-    # 2. Columna d'Equip (Excloure 'nom i cognoms' o 'jugador')
-    col_eq = next((c for c in cols if "equip" in c.lower() and "nom i cognom" not in c.lower() and "jugador" not in c.lower()), cols[1] if len(cols)>1 else cols[0])
-    
-    # 3. Columna de Nom de la persona (Excloure estrictament la columna Equip / Nom Equip)
-    col_nom = next((c for c in cols if ("nom i cognom" in c.lower() or "cognom" in c.lower() or "component" in c.lower() or "jugador" in c.lower())), None)
-    if col_nom is None:
-        col_nom = next((c for c in cols if "nom" in c.lower() and "equip" not in c.lower() and c != col_eq), None)
-    if col_nom is None:
-        col_nom = next((c for c in cols if c not in (col_comp, col_eq)), cols[3] if len(cols)>3 else cols[0])
+    # Cerca de la columna de nom de jugador excloent la columna d'equip
+    col_nom = next((c for c in cols if ("nom" in c.lower() or "cognom" in c.lower() or "jugador" in c.lower() or "component" in c.lower()) and "equip" not in c.lower()), None)
+    if not col_nom:
+        col_nom = next((c for c in cols if "cognom" in c.lower() or "jugador" in c.lower() or "component" in c.lower()), cols[3] if len(cols)>3 else cols[0])
         
-    col_id = next((c for c in cols if "idparticipant" in c.lower() or "id_participant" in c.lower() or "participant" in c.lower()), None)
+    col_id = next((c for c in cols if "idparticipant" in c.lower() or "id_participant" in c.lower() or "id" in c.lower()), None)
     
     mask = (df_cons[col_comp].astype(str).str.strip().str.upper() == str(esport).strip().upper()) & \
            (df_cons[col_eq].astype(str).str.strip().str.upper() == str(equip).strip().upper())
