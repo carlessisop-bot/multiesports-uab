@@ -46,7 +46,8 @@ st.markdown("""
 st.markdown("""<div class="main-title">MultiEsports UAB — SAF Servei d'Activitat Física</div>""", unsafe_allow_html=True)
 st.markdown("""<div class="sub-title">Portal Públic de Resultats & Panell d'Àrbitres</div>""", unsafe_allow_html=True)
 
-PASSWORD_ARBITRE = "UAB2026"  # Contrasenya per defecte per als àrbitres/coordinadors
+PASSWORD_ARBITRE = "UAB2026"         # Contrasenya per als àrbitres/coordinadors
+PASSWORD_SUPERADMIN = "SUPERADMIN2026" # Contrasenya per al Superadministrador
 
 # ==========================================
 # 2. FUNCIONS AUXILIARS I DE SEGURETAT
@@ -66,6 +67,22 @@ def safe_int(val, default=0):
     except (ValueError, TypeError):
         pass
     return default
+
+def is_same_id(id1, id2):
+    if id1 is None or id2 is None:
+        return False
+    s1 = str(id1).strip().upper()
+    s2 = str(id2).strip().upper()
+    if not s1 or not s2:
+        return False
+    if s1 == s2:
+        return True
+    try:
+        if float(s1) == float(s2):
+            return True
+    except (ValueError, TypeError):
+        pass
+    return False
 
 def obtenir_fitxer_excel():
     if os.path.exists("Plantilla_MultiEsports_UAB.xlsx"):
@@ -110,26 +127,25 @@ def carregar_jugadors_equip(esport, equip):
     if df_cons.empty:
         return []
     
-    cols = df_cons.columns
-    col_comp = next((c for c in cols if "competi" in c.lower() or "esport" in c.lower()), cols[0])
-    col_eq = next((c for c in cols if "equip" in c.lower()), cols[1] if len(cols)>1 else cols[0])
+    col_comp = next((c for c in df_cons.columns if "competi" in c.lower() or "esport" in c.lower()), df_cons.columns[0])
+    col_eq = next((c for c in df_cons.columns if "equip" in c.lower()), df_cons.columns[1] if len(df_cons.columns)>1 else df_cons.columns[0])
     
-    # Cerca de la columna de nom de jugador excloent la columna d'equip
-    col_nom = next((c for c in cols if ("nom" in c.lower() or "cognom" in c.lower() or "jugador" in c.lower() or "component" in c.lower()) and "equip" not in c.lower()), None)
+    col_nom = next((c for c in df_cons.columns if "cognom" in c.lower() or "component" in c.lower() or "jugador" in c.lower()), None)
     if not col_nom:
-        col_nom = next((c for c in cols if "cognom" in c.lower() or "jugador" in c.lower() or "component" in c.lower()), cols[3] if len(cols)>3 else cols[0])
+        col_nom = next((c for c in df_cons.columns if "nom" in c.lower() and "equip" not in c.lower()), df_cons.columns[3] if len(df_cons.columns)>3 else df_cons.columns[0])
         
-    col_id = next((c for c in cols if "idparticipant" in c.lower() or "id_participant" in c.lower() or "id" in c.lower()), None)
+    col_id = next((c for c in df_cons.columns if "idparticipant" in c.lower() or "id_participant" in c.lower() or ("id" in c.lower() and "part" in c.lower())), None)
+    if not col_id:
+        col_id = next((c for c in df_cons.columns if c.lower() == "id" or "id" in c.lower()), None)
     
-    mask = (df_cons[col_comp].astype(str).str.strip().str.upper() == str(esport).strip().upper()) & \
-           (df_cons[col_eq].astype(str).str.strip().str.upper() == str(equip).strip().upper())
+    mask = (df_cons[col_comp].astype(str).str.strip().str.upper() == str(esport).strip().upper()) &            (df_cons[col_eq].astype(str).str.strip().str.upper() == str(equip).strip().upper())
            
     df_sub = df_cons[mask]
     jugadors = []
     for _, r in df_sub.iterrows():
-        nom = str(r[col_nom]).strip() if pd.notnull(r[col_nom]) else ""
+        nom = str(r[col_nom]).strip() if col_nom and pd.notnull(r[col_nom]) else ""
         id_part = str(r[col_id]).strip() if col_id and pd.notnull(r[col_id]) else ""
-        if nom and nom.lower() != "nan" and nom.strip().upper() != str(equip).strip().upper():
+        if nom and nom.lower() != "nan" and nom.upper() != str(equip).strip().upper():
             jugadors.append({"nom": nom, "id_participant": id_part})
     return jugadors
 
@@ -141,7 +157,8 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
     try:
         import openpyxl
         
-        wb = openpyxl.load_workbook(excel_file, keep_vba=True)
+        is_xlsm = excel_file.lower().endswith(".xlsm")
+        wb = openpyxl.load_workbook(excel_file, keep_vba=is_xlsm)
         if "Calendari" not in wb.sheetnames:
             return False, "No s'ha trobat el full 'Calendari' a l'Excel."
             
@@ -172,8 +189,7 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
         for row in range(2, ws_cal.max_row + 1):
             val_id_raw = ws_cal.cell(row=row, column=col_id).value
             if val_id_raw is not None:
-                val_id_str = str(val_id_raw).strip()
-                if val_id_str == target_id_str or safe_int(val_id_raw) == safe_int(id_partit):
+                if is_same_id(val_id_raw, id_partit):
                     ws_cal.cell(row=row, column=col_rl, value=safe_int(res_loc))
                     ws_cal.cell(row=row, column=col_rv, value=safe_int(res_vis))
                     ws_cal.cell(row=row, column=col_estat, value="VALIDAT")
@@ -191,50 +207,59 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
         if not trobat:
             return False, f"No s'ha trobat el partit amb ID '{id_partit}' al Calendari."
             
-        # 2. Gravació d'Assistències al full 'Assistencies'
+        # 2. Gravació d'Assistències al full 'Assistencies' (10 Columnes Oficials)
+        headers_ass = ["IdPartit", "IdParticipant", "NomJugador", "Competició", "Equip", "Assisteix", "DataRegistre", "Gols", "Groga", "Vermella"]
         if "Assistencies" not in wb.sheetnames:
             ws_ass = wb.create_sheet("Assistencies")
-            headers_ass = ["IdPartit", "Competicio", "Equip", "NomJugador", "IdParticipant", "Assisteix", "DataRegistre"]
-            for c_idx, h in enumerate(headers_ass, 1):
-                ws_ass.cell(row=1, column=c_idx, value=h)
         else:
             ws_ass = wb["Assistencies"]
+            
+        for c_idx, h in enumerate(headers_ass, 1):
+            if ws_ass.cell(row=1, column=c_idx).value is None or str(ws_ass.cell(row=1, column=c_idx).value).strip() == "":
+                ws_ass.cell(row=1, column=c_idx, value=h)
             
         now_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
         
         # Eliminar registres anteriors d'aquest partit si ja s'havia validat
         rows_to_delete = []
         for r in range(2, ws_ass.max_row + 1):
-            if str(ws_ass.cell(row=r, column=1).value).strip() == target_id_str:
+            if is_same_id(ws_ass.cell(row=r, column=1).value, id_partit):
                 rows_to_delete.append(r)
         for r in reversed(rows_to_delete):
             ws_ass.delete_rows(r)
             
-        # Inserir registres locals
-        for jug_info, assist in assistencies_loc.items():
-            nom_j = jug_info.get("nom", "")
-            id_p = jug_info.get("id_participant", "")
-            r_next = ws_ass.max_row + 1
-            ws_ass.cell(row=r_next, column=1, value=str(id_partit))
-            ws_ass.cell(row=r_next, column=2, value=str(esport))
-            ws_ass.cell(row=r_next, column=3, value=str(eq_loc))
-            ws_ass.cell(row=r_next, column=4, value=str(nom_j))
-            ws_ass.cell(row=r_next, column=5, value=str(id_p))
-            ws_ass.cell(row=r_next, column=6, value=1 if assist else 0)
-            ws_ass.cell(row=r_next, column=7, value=now_str)
-            
-        # Inserir registres visitants
-        for jug_info, assist in assistencies_vis.items():
-            nom_j = jug_info.get("nom", "")
-            id_p = jug_info.get("id_participant", "")
-            r_next = ws_ass.max_row + 1
-            ws_ass.cell(row=r_next, column=1, value=str(id_partit))
-            ws_ass.cell(row=r_next, column=2, value=str(esport))
-            ws_ass.cell(row=r_next, column=3, value=str(eq_vis))
-            ws_ass.cell(row=r_next, column=4, value=str(nom_j))
-            ws_ass.cell(row=r_next, column=5, value=str(id_p))
-            ws_ass.cell(row=r_next, column=6, value=1 if assist else 0)
-            ws_ass.cell(row=r_next, column=7, value=now_str)
+        def _inserir_registres(dict_ass, nom_equip):
+            for jug_info, val_data in dict_ass.items():
+                if isinstance(jug_info, tuple):
+                    jug_info = dict(jug_info)
+                nom_j = jug_info.get("nom", "") if isinstance(jug_info, dict) else ""
+                id_p = jug_info.get("id_participant", "") if isinstance(jug_info, dict) else ""
+                
+                if isinstance(val_data, dict):
+                    assist = val_data.get("assisteix", True)
+                    gols = val_data.get("gols", 0)
+                    groga = val_data.get("groga", 0)
+                    vermella = val_data.get("vermella", 0)
+                else:
+                    assist = bool(val_data)
+                    gols = 0
+                    groga = 0
+                    vermella = 0
+
+                r_next = ws_ass.max_row + 1
+                ws_ass.cell(row=r_next, column=1, value=str(id_partit))
+                ws_ass.cell(row=r_next, column=2, value=str(id_p))
+                ws_ass.cell(row=r_next, column=3, value=str(nom_j))
+                ws_ass.cell(row=r_next, column=4, value=str(esport))
+                ws_ass.cell(row=r_next, column=5, value=str(nom_equip))
+                ws_ass.cell(row=r_next, column=6, value=1 if assist else 0)
+                ws_ass.cell(row=r_next, column=7, value=now_str)
+                ws_ass.cell(row=r_next, column=8, value=int(gols) if gols else None)
+                ws_ass.cell(row=r_next, column=9, value=int(groga) if groga else None)
+                ws_ass.cell(row=r_next, column=10, value=int(vermella) if vermella else None)
+
+        _inserir_registres(assistencies_loc, eq_loc)
+        _inserir_registres(assistencies_vis, eq_vis)
             
         wb.save(excel_file)
         return True, "Acta de partit i registre d'assistències desats amb èxit!"
@@ -693,10 +718,60 @@ with tab_fairplay:
 with tab_arbitre:
     st.markdown("### 🔐 Accés Restringit per a Àrbitres i Organització")
     
-    pwd_input = st.text_input("Introdueix la contrasenya d'accés:", type="password", help="Contrasenya per defecte: UAB2026")
+    pwd_input = st.text_input("Introdueix la contrasenya d'accés:", type="password", help="Àrbitres: UAB2026 | Superadmin: SUPERADMIN2026")
     
-    if pwd_input == PASSWORD_ARBITRE:
-        st.success("Sessió d'Àrbitre Validada amb Èxit! ⚽")
+    is_superadmin = (pwd_input == PASSWORD_SUPERADMIN)
+    is_arbitre = (pwd_input == PASSWORD_ARBITRE or is_superadmin)
+    
+    if is_arbitre:
+        if is_superadmin:
+            st.success("Sessió de Superadministrador Validada amb Èxit! 👑")
+        else:
+            st.success("Sessió d'Àrbitre Validada amb Èxit! ⚽")
+            
+        # -------------------------------------------------------------
+        # SECCIÓ DE DESCARREGA I CÀRREGA DE L'EXCEL CENTRAL
+        # -------------------------------------------------------------
+        st.markdown("---")
+        st.markdown("#### 📁 Gestió & Sincronització de l'Excel Central com a Còpia Local")
+        
+        if is_superadmin:
+            excel_file_path = obtenir_fitxer_excel()
+            if os.path.exists(excel_file_path):
+                with open(excel_file_path, "rb") as f_ex:
+                    excel_bytes_data = f_ex.read()
+                    
+                is_xlsm_ext = excel_file_path.lower().endswith(".xlsm")
+                mime_type_str = "application/vnd.ms-excel.sheet.macroEnabled.12" if is_xlsm_ext else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                
+                c_ex1, c_ex2 = st.columns([1, 1])
+                with c_ex1:
+                    st.download_button(
+                        label="💾 Baixar Excel Central (.xlsx) al teu Escriptori",
+                        data=excel_bytes_data,
+                        file_name=os.path.basename(excel_file_path),
+                        mime=mime_type_str,
+                        key="btn_download_excel_central_master"
+                    )
+                    st.caption("ℹ️ Descarrega el fitxer Excel oficial amb tots els resultats, classificacions i assistències registrades.")
+                    
+                with c_ex2:
+                    uploaded_master = st.file_uploader(
+                        "📤 Actualitzar / Carregar Excel des de l'Escriptori:",
+                        type=["xlsx", "xlsm"],
+                        key="uploader_excel_master"
+                    )
+                    if uploaded_master is not None:
+                        if st.button("🔄 Sobreescriure Base de Dades Excel a la WebApp"):
+                            target_save = uploaded_master.name
+                            with open(target_save, "wb") as f_out:
+                                f_out.write(uploaded_master.getbuffer())
+                            st.success(f"S'ha actualitzat el fitxer '{target_save}' a la WebApp amb èxit!")
+                            st.rerun()
+        else:
+            st.info("🔒 La descàrrega i càrrega de l'Excel Central està reservada exclusivament al Superadministrador (contrasenya: `SUPERADMIN2026`).")
+            
+        st.markdown("---")
         
         if not df_cal.empty:
             df_pendents = df_cal[~df_cal["EstatPartit"].astype(str).str.strip().str.upper().isin(["VALIDAT"])]
@@ -741,7 +816,7 @@ with tab_arbitre:
                         golejadors_vis = st.text_input("Golejadors Visitant (ex: Joan (1)):", value="")
                         
                     st.markdown("---")
-                    st.markdown("#### 2. Control d'Assistència de Jugadors/es (Full Consolidat)")
+                    st.markdown("#### 2. Control d'Assistència i Estadístiques per Jugador/a (Full Consolidat)")
                     
                     ca_loc, ca_vis = st.columns(2)
                     dict_ass_loc = {}
@@ -751,8 +826,16 @@ with tab_arbitre:
                         st.markdown(f"##### 📋 Convocatòria {p_eq_loc}")
                         if jugadors_loc:
                             for idx_j, jug in enumerate(jugadors_loc):
-                                chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_loc_{p_id}_{idx_j}")
-                                dict_ass_loc[tuple(jug.items())] = chk
+                                c_j1, c_j2, c_j3, c_j4 = st.columns([3, 1, 1, 1])
+                                with c_j1:
+                                    chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_loc_{p_id}_{idx_j}")
+                                with c_j2:
+                                    gols_j = st.number_input("⚽ Gols", min_value=0, max_value=20, value=0, key=f"gols_loc_{p_id}_{idx_j}")
+                                with c_j3:
+                                    groga_j = st.number_input("🟨 Groga", min_value=0, max_value=2, value=0, key=f"groga_loc_{p_id}_{idx_j}")
+                                with c_j4:
+                                    verm_j = st.number_input("🟥 Vermella", min_value=0, max_value=1, value=0, key=f"verm_loc_{p_id}_{idx_j}")
+                                dict_ass_loc[tuple(jug.items())] = {"assisteix": chk, "gols": gols_j, "groga": groga_j, "vermella": verm_j}
                         else:
                             st.caption("No s'ha trobat llista de jugadors per a aquest equip al full Consolidat.")
                             
@@ -760,8 +843,16 @@ with tab_arbitre:
                         st.markdown(f"##### 📋 Convocatòria {p_eq_vis}")
                         if jugadors_vis:
                             for idx_j, jug in enumerate(jugadors_vis):
-                                chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_vis_{p_id}_{idx_j}")
-                                dict_ass_vis[tuple(jug.items())] = chk
+                                c_j1, c_j2, c_j3, c_j4 = st.columns([3, 1, 1, 1])
+                                with c_j1:
+                                    chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_vis_{p_id}_{idx_j}")
+                                with c_j2:
+                                    gols_j = st.number_input("⚽ Gols", min_value=0, max_value=20, value=0, key=f"gols_vis_{p_id}_{idx_j}")
+                                with c_j3:
+                                    groga_j = st.number_input("🟨 Groga", min_value=0, max_value=2, value=0, key=f"groga_vis_{p_id}_{idx_j}")
+                                with c_j4:
+                                    verm_j = st.number_input("🟥 Vermella", min_value=0, max_value=1, value=0, key=f"verm_vis_{p_id}_{idx_j}")
+                                dict_ass_vis[tuple(jug.items())] = {"assisteix": chk, "gols": gols_j, "groga": groga_j, "vermella": verm_j}
                         else:
                             st.caption("No s'ha trobat llista de jugadors per a aquest equip al full Consolidat.")
                             
