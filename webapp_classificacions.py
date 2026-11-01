@@ -69,15 +69,16 @@ def safe_int(val, default=0):
     return default
 
 def obtenir_fitxer_excel():
-    if os.path.exists("Plantilla_MultiEsports_UAB.xlsx"):
-        return "Plantilla_MultiEsports_UAB.xlsx"
-    elif os.path.exists("Plantilla_MultiEsports_UAB.xlsm"):
+    if os.path.exists("Plantilla_MultiEsports_UAB.xlsm"):
         return "Plantilla_MultiEsports_UAB.xlsm"
+    elif os.path.exists("Plantilla_MultiEsports_UAB.xlsx"):
+        return "Plantilla_MultiEsports_UAB.xlsx"
     else:
         files = [f for f in os.listdir(".") if (f.endswith(".xlsm") or f.endswith(".xlsx")) and not f.startswith("~$")]
         if files:
+            files.sort(key=lambda x: 0 if x.endswith(".xlsm") else 1)
             return files[0]
-    return "Plantilla_MultiEsports_UAB.xlsx"
+    return "Plantilla_MultiEsports_UAB.xlsm"
 
 # ==========================================
 # 3. LECTURA I ESCRIPTURA D'EXCEL
@@ -141,7 +142,7 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
     try:
         import openpyxl
         
-        wb = openpyxl.load_workbook(excel_file, keep_vba=False)
+        wb = openpyxl.load_workbook(excel_file, keep_vba=True if str(excel_file).lower().endswith(".xlsm") else False)
         if "Calendari" not in wb.sheetnames:
             return False, "No s'ha trobat el full 'Calendari' a l'Excel."
             
@@ -777,14 +778,16 @@ with tab_arbitre:
                 
                 c_ex1, c_ex2 = st.columns([1, 1])
                 with c_ex1:
+                    is_xlsm_current = excel_file_path.lower().endswith(".xlsm")
+                    label_btn = "💾 Baixar Excel Central (.xlsm amb Macros)" if is_xlsm_current else "💾 Baixar Excel Central (.xlsx)"
                     st.download_button(
-                        label="💾 Baixar Excel Central (.xlsx) al teu Escriptori",
+                        label=label_btn,
                         data=excel_bytes_data,
                         file_name=os.path.basename(excel_file_path),
                         mime=mime_type_str,
                         key="btn_download_excel_central_master"
                     )
-                    st.caption("ℹ️ Descarrega el fitxer Excel oficial amb tots els resultats, classificacions i assistències registrades.")
+                    st.caption("ℹ️ Descarrega el fitxer Excel oficial (inclou macros VBA si es baixa en format .xlsm) amb tots els resultats, classificacions i assistències.")
                     
                 with c_ex2:
                     uploaded_master = st.file_uploader(
