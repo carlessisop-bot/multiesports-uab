@@ -46,8 +46,8 @@ st.markdown("""
 st.markdown("""<div class="main-title">MultiEsports UAB — SAF Servei d'Activitat Física</div>""", unsafe_allow_html=True)
 st.markdown("""<div class="sub-title">Portal Públic de Resultats & Panell d'Àrbitres</div>""", unsafe_allow_html=True)
 
-PASSWORD_ARBITRE = "UAB2026"        # Contrasenya per als àrbitres/coordinadors
-PASSWORD_SUPERADMIN = "SUPERADMIN2026" # Contrasenya per al Superadministrador
+PASSWORD_ARBITRE = "7hk:2pJHHEzm8a6"        # Contrasenya per als àrbitres/coordinadors
+PASSWORD_SUPERADMIN = "7hk:2pJHHEzm6a1" # Contrasenya per al Superadministrador
 
 # ==========================================
 # 2. FUNCIONS AUXILIARS I DE SEGURETAT
