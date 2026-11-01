@@ -110,11 +110,22 @@ def carregar_jugadors_equip(esport, equip):
     if df_cons.empty:
         return []
     
-    # Identificar columnes
-    col_comp = next((c for c in df_cons.columns if "competi" in c.lower() or "esport" in c.lower()), df_cons.columns[0])
-    col_eq = next((c for c in df_cons.columns if "equip" in c.lower()), df_cons.columns[1] if len(df_cons.columns)>1 else df_cons.columns[0])
-    col_nom = next((c for c in df_cons.columns if "nom" in c.lower()), df_cons.columns[3] if len(df_cons.columns)>3 else df_cons.columns[0])
-    col_id = next((c for c in df_cons.columns if "idparticipant" in c.lower() or "id_participant" in c.lower() or "id" in c.lower()), None)
+    cols = list(df_cons.columns)
+    
+    # 1. Columna de Competició / Esport
+    col_comp = next((c for c in cols if "competi" in c.lower() or "esport" in c.lower()), cols[0])
+    
+    # 2. Columna d'Equip (Excloure 'nom i cognoms' o 'jugador')
+    col_eq = next((c for c in cols if "equip" in c.lower() and "nom i cognom" not in c.lower() and "jugador" not in c.lower()), cols[1] if len(cols)>1 else cols[0])
+    
+    # 3. Columna de Nom de la persona (Excloure estrictament la columna Equip / Nom Equip)
+    col_nom = next((c for c in cols if ("nom i cognom" in c.lower() or "cognom" in c.lower() or "component" in c.lower() or "jugador" in c.lower())), None)
+    if col_nom is None:
+        col_nom = next((c for c in cols if "nom" in c.lower() and "equip" not in c.lower() and c != col_eq), None)
+    if col_nom is None:
+        col_nom = next((c for c in cols if c not in (col_comp, col_eq)), cols[3] if len(cols)>3 else cols[0])
+        
+    col_id = next((c for c in cols if "idparticipant" in c.lower() or "id_participant" in c.lower() or "participant" in c.lower()), None)
     
     mask = (df_cons[col_comp].astype(str).str.strip().str.upper() == str(esport).strip().upper()) & \
            (df_cons[col_eq].astype(str).str.strip().str.upper() == str(equip).strip().upper())
@@ -122,9 +133,9 @@ def carregar_jugadors_equip(esport, equip):
     df_sub = df_cons[mask]
     jugadors = []
     for _, r in df_sub.iterrows():
-        nom = str(r[col_nom]).strip()
+        nom = str(r[col_nom]).strip() if pd.notnull(r[col_nom]) else ""
         id_part = str(r[col_id]).strip() if col_id and pd.notnull(r[col_id]) else ""
-        if nom and nom.lower() != "nan":
+        if nom and nom.lower() != "nan" and nom.strip().upper() != str(equip).strip().upper():
             jugadors.append({"nom": nom, "id_participant": id_part})
     return jugadors
 
@@ -205,44 +216,31 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
         for r in reversed(rows_to_delete):
             ws_ass.delete_rows(r)
             
-        # Assegurar capçaleres correctes a la fila 1 de Assistencies
-        headers_ass = ["IdPartit", "IdParticipant", "NomJugador", "Competició", "Equip", "Assisteix", "DataRegistre", "Gols", "Groga", "Vermella"]
-        for c_idx, h in enumerate(headers_ass, 1):
-            if ws_ass.cell(row=1, column=c_idx).value is None or str(ws_ass.cell(row=1, column=c_idx).value).strip() == "":
-                ws_ass.cell(row=1, column=c_idx, value=h)
-
-        def _inserir_registres(dict_ass, nom_equip):
-            for jug_info, val_data in dict_ass.items():
-                if isinstance(jug_info, tuple):
-                    jug_info = dict(jug_info)
-                nom_j = jug_info.get("nom", "") if isinstance(jug_info, dict) else ""
-                id_p = jug_info.get("id_participant", "") if isinstance(jug_info, dict) else ""
-                
-                if isinstance(val_data, dict):
-                    assist = val_data.get("assisteix", True)
-                    gols = val_data.get("gols", 0)
-                    groga = val_data.get("groga", 0)
-                    vermella = val_data.get("vermella", 0)
-                else:
-                    assist = bool(val_data)
-                    gols = 0
-                    groga = 0
-                    vermella = 0
-
-                r_next = ws_ass.max_row + 1
-                ws_ass.cell(row=r_next, column=1, value=str(id_partit))
-                ws_ass.cell(row=r_next, column=2, value=str(id_p))
-                ws_ass.cell(row=r_next, column=3, value=str(nom_j))
-                ws_ass.cell(row=r_next, column=4, value=str(esport))
-                ws_ass.cell(row=r_next, column=5, value=str(nom_equip))
-                ws_ass.cell(row=r_next, column=6, value=1 if assist else 0)
-                ws_ass.cell(row=r_next, column=7, value=now_str)
-                ws_ass.cell(row=r_next, column=8, value=int(gols) if gols else None)
-                ws_ass.cell(row=r_next, column=9, value=int(groga) if groga else None)
-                ws_ass.cell(row=r_next, column=10, value=int(vermella) if vermella else None)
-
-        _inserir_registres(assistencies_loc, eq_loc)
-        _inserir_registres(assistencies_vis, eq_vis)
+        # Inserir registres locals
+        for jug_info, assist in assistencies_loc.items():
+            nom_j = jug_info.get("nom", "")
+            id_p = jug_info.get("id_participant", "")
+            r_next = ws_ass.max_row + 1
+            ws_ass.cell(row=r_next, column=1, value=str(id_partit))
+            ws_ass.cell(row=r_next, column=2, value=str(esport))
+            ws_ass.cell(row=r_next, column=3, value=str(eq_loc))
+            ws_ass.cell(row=r_next, column=4, value=str(nom_j))
+            ws_ass.cell(row=r_next, column=5, value=str(id_p))
+            ws_ass.cell(row=r_next, column=6, value=1 if assist else 0)
+            ws_ass.cell(row=r_next, column=7, value=now_str)
+            
+        # Inserir registres visitants
+        for jug_info, assist in assistencies_vis.items():
+            nom_j = jug_info.get("nom", "")
+            id_p = jug_info.get("id_participant", "")
+            r_next = ws_ass.max_row + 1
+            ws_ass.cell(row=r_next, column=1, value=str(id_partit))
+            ws_ass.cell(row=r_next, column=2, value=str(esport))
+            ws_ass.cell(row=r_next, column=3, value=str(eq_vis))
+            ws_ass.cell(row=r_next, column=4, value=str(nom_j))
+            ws_ass.cell(row=r_next, column=5, value=str(id_p))
+            ws_ass.cell(row=r_next, column=6, value=1 if assist else 0)
+            ws_ass.cell(row=r_next, column=7, value=now_str)
             
         wb.save(excel_file)
         return True, "Acta de partit i registre d'assistències desats amb èxit!"
@@ -756,36 +754,20 @@ with tab_arbitre:
                     dict_ass_vis = {}
                     
                     with ca_loc:
-                        st.markdown(f"##### 📋 Convocatòria & Estadístiques {p_eq_loc}")
+                        st.markdown(f"##### 📋 Convocatòria {p_eq_loc}")
                         if jugadors_loc:
                             for idx_j, jug in enumerate(jugadors_loc):
-                                c_j1, c_j2, c_j3, c_j4 = st.columns([3, 1, 1, 1])
-                                with c_j1:
-                                    chk = st.checkbox(f"{jug['nom']}", value=True, key=f"chk_loc_{p_id}_{idx_j}")
-                                with c_j2:
-                                    gols_j = st.number_input("Gols", min_value=0, max_value=20, value=0, key=f"gols_loc_{p_id}_{idx_j}")
-                                with c_j3:
-                                    groga_j = st.number_input("🟨", min_value=0, max_value=2, value=0, key=f"groga_loc_{p_id}_{idx_j}")
-                                with c_j4:
-                                    verm_j = st.number_input("🟥", min_value=0, max_value=1, value=0, key=f"verm_loc_{p_id}_{idx_j}")
-                                dict_ass_loc[tuple(jug.items())] = {"assisteix": chk, "gols": gols_j, "groga": groga_j, "vermella": verm_j}
+                                chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_loc_{p_id}_{idx_j}")
+                                dict_ass_loc[tuple(jug.items())] = chk
                         else:
                             st.caption("No s'ha trobat llista de jugadors per a aquest equip al full Consolidat.")
                             
                     with ca_vis:
-                        st.markdown(f"##### 📋 Convocatòria & Estadístiques {p_eq_vis}")
+                        st.markdown(f"##### 📋 Convocatòria {p_eq_vis}")
                         if jugadors_vis:
                             for idx_j, jug in enumerate(jugadors_vis):
-                                c_j1, c_j2, c_j3, c_j4 = st.columns([3, 1, 1, 1])
-                                with c_j1:
-                                    chk = st.checkbox(f"{jug['nom']}", value=True, key=f"chk_vis_{p_id}_{idx_j}")
-                                with c_j2:
-                                    gols_j = st.number_input("Gols", min_value=0, max_value=20, value=0, key=f"gols_vis_{p_id}_{idx_j}")
-                                with c_j3:
-                                    groga_j = st.number_input("🟨", min_value=0, max_value=2, value=0, key=f"groga_vis_{p_id}_{idx_j}")
-                                with c_j4:
-                                    verm_j = st.number_input("🟥", min_value=0, max_value=1, value=0, key=f"verm_vis_{p_id}_{idx_j}")
-                                dict_ass_vis[tuple(jug.items())] = {"assisteix": chk, "gols": gols_j, "groga": groga_j, "vermella": verm_j}
+                                chk = st.checkbox(f"✔️ {jug['nom']}", value=True, key=f"chk_vis_{p_id}_{idx_j}")
+                                dict_ass_vis[tuple(jug.items())] = chk
                         else:
                             st.caption("No s'ha trobat llista de jugadors per a aquest equip al full Consolidat.")
                             
