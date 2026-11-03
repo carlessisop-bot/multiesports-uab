@@ -575,6 +575,17 @@ df_fp = pd.DataFrame()
 esport_sel = ""
 grup_sel = ""
 
+st.markdown("""
+<div style="background-color: #f8f9fa; padding: 14px 18px; border-radius: 8px; border-left: 5px solid #008037; margin-top: 10px; margin-bottom: 20px;">
+    <h4 style="margin-top: 0; color: #003366; font-size: 1.1rem; font-weight: bold;">🔗 Enllaços de Gestió i Formularis:</h4>
+    <p style="margin-bottom: 6px;">
+        1️⃣ <b>Sol·licitud de Canvi de Partit:</b> <a href="https://forms.cloud.microsoft/e/WftUEEDgUT" target="_blank">https://forms.cloud.microsoft/e/WftUEEDgUT</a>
+    </p>
+    <p style="margin-bottom: 0;">
+        2️⃣ <b>Introducció de Resultats de la Lliga Intracampus:</b> <a href="https://forms.cloud.microsoft/e/SPSgYcm6pA" target="_blank">https://forms.cloud.microsoft/e/SPSgYcm6pA</a>
+    </p>
+</div>
+""", unsafe_allow_html=True)
 tab_public, tab_pitxitxi, tab_fairplay, tab_arbitre = st.tabs([
     "📊 Classificació Lliga",
     "⚽ Pitxitxis (Golejadors)",
