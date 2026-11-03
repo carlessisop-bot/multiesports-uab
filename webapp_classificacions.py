@@ -43,8 +43,22 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""<div class="main-title">MultiEsports UAB — SAF Servei d'Activitat Física</div>""", unsafe_allow_html=True)
-st.markdown("""<div class="sub-title">Portal Públic de Resultats & Panell d'Àrbitres</div>""", unsafe_allow_html=True)
+# Capçalera corporativa amb Logos i Títol
+c_logo1, c_title, c_logo2 = st.columns([1, 4, 1])
+
+with c_logo1:
+    logo_uab_path = "logo_UAB.jpg" if os.path.exists("logo_UAB.jpg") else (os.path.join("knowledge", "logo_UAB.jpg") if os.path.exists(os.path.join("knowledge", "logo_UAB.jpg")) else None)
+    if logo_uab_path:
+        st.image(logo_uab_path, use_container_width=True)
+
+with c_title:
+    st.markdown("""<div class="main-title">MultiEsports UAB — SAF Servei d'Activitat Física</div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="sub-title">Portal Públic de Resultats & Panell d'Àrbitres</div>""", unsafe_allow_html=True)
+
+with c_logo2:
+    logo_saf_path = "logo_competicions_SAF.jpg" if os.path.exists("logo_competicions_SAF.jpg") else (os.path.join("knowledge", "logo_competicions_SAF.jpg") if os.path.exists(os.path.join("knowledge", "logo_competicions_SAF.jpg")) else None)
+    if logo_saf_path:
+        st.image(logo_saf_path, use_container_width=True)
 
 PASSWORD_ARBITRE = "7hk:2pJHHEzm8a6"        # Contrasenya per als àrbitres/coordinadors
 PASSWORD_SUPERADMIN = "7hk:2pJHHEzm6a1" # Contrasenya per al Superadministrador
