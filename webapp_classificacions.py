@@ -169,7 +169,9 @@ def carregar_jugadors_equip(esport, equip):
 def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, res_vis, 
                                   tg_loc=0, tv_loc=0, tg_vis=0, tv_vis=0, 
                                   text_gols_loc="", text_gols_vis="", 
-                                  assistencies_loc=[], assistencies_vis=[]):
+                                  assistencies_loc=[], assistencies_vis=[],
+                                  arbitre_nom="", delegat_local_nom="", signatura_delegat_local="",
+                                  delegat_visitant_nom="", signatura_delegat_visitant="", signatura_arbitre=""):
     excel_file = obtenir_fitxer_excel()
     try:
         import openpyxl
@@ -198,6 +200,13 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
         
         col_gl = col_map.get("GolejadorsLocal", 22)
         col_gv = col_map.get("GolejadorsVisitant", 23)
+        
+        col_arb = col_map.get("Arbitre") or col_map.get("Àrbitre")
+        col_dl = col_map.get("DelegatLocal")
+        col_sdl = col_map.get("SignaturaDelegatLocal")
+        col_dv = col_map.get("DelegatVisitant")
+        col_sdv = col_map.get("SignaturaDelegatVisitant")
+        col_sarb = col_map.get("SignaturaArbitre")
         
         target_id_str = str(id_partit).strip()
         
@@ -271,6 +280,14 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
                     
                     if text_gols_loc: ws_cal.cell(row=row, column=col_gl, value=str(text_gols_loc))
                     if text_gols_vis: ws_cal.cell(row=row, column=col_gv, value=str(text_gols_vis))
+                    
+                    if col_arb and arbitre_nom: ws_cal.cell(row=row, column=col_arb, value=str(arbitre_nom))
+                    if col_dl and delegat_local_nom: ws_cal.cell(row=row, column=col_dl, value=str(delegat_local_nom))
+                    if col_sdl and signatura_delegat_local: ws_cal.cell(row=row, column=col_sdl, value=str(signatura_delegat_local))
+                    if col_dv and delegat_visitant_nom: ws_cal.cell(row=row, column=col_dv, value=str(delegat_visitant_nom))
+                    if col_sdv and signatura_delegat_visitant: ws_cal.cell(row=row, column=col_sdv, value=str(signatura_delegat_visitant))
+                    if col_sarb and signatura_arbitre: ws_cal.cell(row=row, column=col_sarb, value=str(signatura_arbitre))
+                    
                     trobat = True
                     break
                     
@@ -942,6 +959,30 @@ with tab_arbitre:
                             st.caption("No s'ha trobat llista de jugadors per a aquest equip al full Consolidat.")
                             
                     st.markdown("---")
+                    st.markdown("#### 3. Identificació i Signatura de l'Acta (Àrbitre i Delegats/es)")
+                    
+                    cs1, cs2 = st.columns(2)
+                    with cs1:
+                        st.markdown(f"##### 🏠 Delegat/da {p_eq_loc}")
+                        delegat_local_nom = st.text_input(f"Nom i Cognoms Delegat/da {p_eq_loc}:", value="", key=f"del_loc_{p_id}")
+                        chk_sig_loc = st.checkbox(f"✍️ Conformitat i Signatura Delegat/da {p_eq_loc}", value=False, key=f"sig_loc_{p_id}")
+                        signatura_delegat_local = "CONFORME / SIGNAT" if chk_sig_loc else "PENDENT"
+
+                    with cs2:
+                        st.markdown(f"##### ✈️ Delegat/da {p_eq_vis}")
+                        delegat_visitant_nom = st.text_input(f"Nom i Cognoms Delegat/da {p_eq_vis}:", value="", key=f"del_vis_{p_id}")
+                        chk_sig_vis = st.checkbox(f"✍️ Conformitat i Signatura Delegat/da {p_eq_vis}", value=False, key=f"sig_vis_{p_id}")
+                        signatura_delegat_visitant = "CONFORME / SIGNAT" if chk_sig_vis else "PENDENT"
+
+                    st.markdown("##### ⚽ Àrbitre / Col·legiat/da Oficial")
+                    car1, car2 = st.columns(2)
+                    with car1:
+                        arbitre_nom = st.text_input("Nom i Cognoms de l'Àrbitre:", value="", key=f"arb_nom_{p_id}")
+                    with car2:
+                        chk_sig_arb = st.checkbox("✍️ Validació i Signatura de l'Àrbitre", value=True, key=f"sig_arb_{p_id}")
+                        signatura_arbitre = "SIGNAT / VALIDAT" if chk_sig_arb else "PENDENT"
+
+                    st.markdown("---")
                     submitted = st.form_submit_button("💾 Validar Acta, Desar Assistències i Actualitzar Classificació")
                     
                     if submitted:
@@ -950,7 +991,13 @@ with tab_arbitre:
                             gols_loc, gols_vis,
                             t_grogues_loc, t_vermelles_loc, t_grogues_vis, t_vermelles_vis,
                             golejadors_loc, golejadors_vis,
-                            ass_loc_clean, ass_vis_clean
+                            ass_loc_clean, ass_vis_clean,
+                            arbitre_nom=arbitre_nom,
+                            delegat_local_nom=delegat_local_nom,
+                            signatura_delegat_local=signatura_delegat_local,
+                            delegat_visitant_nom=delegat_visitant_nom,
+                            signatura_delegat_visitant=signatura_delegat_visitant,
+                            signatura_arbitre=signatura_arbitre
                         )
                         if ok:
                             st.success(msg)
