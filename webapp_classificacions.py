@@ -158,7 +158,7 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
                                   assistencies_loc={}, assistencies_vis={},
                                   estat_partit="VALIDAT",
                                   nom_arbitre="", nom_delegat_loc="", sig_delegat_loc="",
-                                  nom_delegat_vis="", sig_delegat_vis="", sig_arbitre=""):
+                                  nom_delegat_vis="", sig_delegat_vis="", sig_arbitre="", observacions=""):
     excel_file = obtenir_fitxer_excel()
     try:
         import openpyxl
@@ -205,6 +205,7 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
         col_dv = col_map.get("DelegatVisitant") or _get_col("DelegatVisitant")
         col_sdv = col_map.get("SignaturaDelegatVisitant") or _get_col("SignaturaDelegatVisitant")
         col_sarb = col_map.get("SignaturaArbitre") or col_map.get("SignaturaÀrbitre") or _get_col("SignaturaArbitre")
+        col_obs = col_map.get("Observacions") or _get_col("Observacions")
 
         for row in range(2, ws_cal.max_row + 1):
             val_id_raw = ws_cal.cell(row=row, column=col_id).value
@@ -228,6 +229,7 @@ def guardar_acta_amb_assistencies(id_partit, esport, eq_loc, eq_vis, res_loc, re
                     if nom_delegat_vis: ws_cal.cell(row=row, column=col_dv, value=str(nom_delegat_vis).strip())
                     if sig_delegat_vis: ws_cal.cell(row=row, column=col_sdv, value=str(sig_delegat_vis).strip())
                     if sig_arbitre: ws_cal.cell(row=row, column=col_sarb, value=str(sig_arbitre).strip())
+                    if observacions: ws_cal.cell(row=row, column=col_obs, value=str(observacions).strip())
 
                     trobat = True
                     break
@@ -319,6 +321,7 @@ def generar_pdf_acta_partit(row_partit, jugadors_loc=[], jugadors_vis=[]):
     del_v_nom = sanitize_pdf_text(row_partit.get("DelegatVisitant", "") if pd.notnull(row_partit.get("DelegatVisitant")) else "")
     sig_dv = sanitize_pdf_text(row_partit.get("SignaturaDelegatVisitant", "") if pd.notnull(row_partit.get("SignaturaDelegatVisitant")) else "")
     sig_arb = sanitize_pdf_text(row_partit.get("SignaturaArbitre", "") if pd.notnull(row_partit.get("SignaturaArbitre")) else "")
+    obs_text = sanitize_pdf_text(row_partit.get("Observacions", "") if pd.notnull(row_partit.get("Observacions")) else "")
 
     try:
         from reportlab.lib.pagesizes import A4
@@ -403,6 +406,10 @@ def generar_pdf_acta_partit(row_partit, jugadors_loc=[], jugadors_vis=[]):
             ('BOTTOMPADDING', (0,0), (-1,-1), 5),
         ]))
         story.append(t_sig)
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("Observacions / Incidències de l'Àrbitre", sec_style))
+        obs_display = obs_text if obs_text else "Cap incidència registrada."
+        story.append(Paragraph(obs_display, ParagraphStyle('ActaObs', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, textColor=colors.HexColor('#333333'))))
 
         doc.build(story)
         return buffer.getvalue()
@@ -1083,6 +1090,15 @@ with tab_arbitre:
                         chk_sig_vis = st.checkbox(f"✍️ Conformitat Delegat/da {p_eq_vis}", value=False, key=f"chk_sdv_{p_id}")
 
                     st.markdown("---")
+                    st.markdown("#### 4. Observacions / Incidències de l'Àrbitre")
+                    obs_input_val = st.text_area(
+                        "📝 Anota qualsevol incidència, observació o valoració del partit:",
+                        value=str(row_sel.get("Observacions", "") if pd.notnull(row_sel.get("Observacions")) else ""),
+                        key=f"txt_obs_{p_id}",
+                        help="Anota aquí qualsevol incidència destacable, valoració de l'equip o sanció especial."
+                    )
+
+                    st.markdown("---")
                     submitted = st.form_submit_button("💾 Actualitzar Estat, Desar Acta i Assistències")
                     
                     if submitted:
@@ -1125,7 +1141,8 @@ with tab_arbitre:
                             sig_delegat_loc=sig_loc_str,
                             nom_delegat_vis=nom_delegat_vis_val,
                             sig_delegat_vis=sig_vis_str,
-                            sig_arbitre=sig_arb_str
+                            sig_arbitre=sig_arb_str,
+                            observacions=obs_input_val
                         )
                         if ok:
                             st.success(f"S'ha actualitzat el partit [{p_id}] amb l'estat '{nou_estat_partit}' correctament!")
