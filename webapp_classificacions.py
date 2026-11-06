@@ -43,8 +43,29 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""<div class="main-title">MultiEsports UAB — SAF Servei d'Activitat Física</div>""", unsafe_allow_html=True)
-st.markdown("""<div class="sub-title">Portal Públic de Resultats & Panell d'Àrbitres</div>""", unsafe_allow_html=True)
+col_logo1, col_title, col_logo2 = st.columns([1.2, 4, 1.2], vertical_alignment="center")
+
+with col_logo1:
+    path_uab = None
+    for p in ["logo_UAB.jpg", "/workspace/knowledge/logo_UAB.jpg", "/workspace/artifacts/logo_UAB.jpg"]:
+        if os.path.exists(p):
+            path_uab = p
+            break
+    if path_uab:
+        st.image(path_uab, use_container_width=True)
+
+with col_title:
+    st.markdown("""<div class="main-title" style="text-align: center;">MultiEsports UAB — SAF Servei d'Activitat Física</div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="sub-title" style="text-align: center;">Portal Públic de Resultats & Panell d'Àrbitres</div>""", unsafe_allow_html=True)
+
+with col_logo2:
+    path_saf = None
+    for p in ["logo_competicions_SAF.jpg", "logo competicions SAF.jpg", "/workspace/knowledge/logo_competicions_SAF.jpg", "/workspace/artifacts/logo_competicions_SAF.jpg"]:
+        if os.path.exists(p):
+            path_saf = p
+            break
+    if path_saf:
+        st.image(path_saf, use_container_width=True)
 
 PASSWORD_ARBITRE = "7hk:2pJHHEzm8a6"        # Contrasenya per als àrbitres/coordinadors
 PASSWORD_SUPERADMIN = "7hk:2pJHHEzm6a1" # Contrasenya per al Superadministrador
