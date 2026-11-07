@@ -993,61 +993,42 @@ with tab_fairplay:
 # ==========================================
 with tab_equips:
     st.markdown("### 👥 Accés Restringit per a Delegats/des i Equips")
-    st.caption("🔑 Introdueix el teu Correu UAB i la teva contrasenya d'equip per accedir al panell privat.")
+    st.caption("🔑 Introdueix el teu Correu UAB i la teva contrasenya d'equip per accedir exclusivament al teu panell d'equip.")
     
     df_passwords = carregar_passwords()
     
     col_acc1, col_acc2 = st.columns(2)
     with col_acc1:
-        email_input = st.text_input("📧 Correu Electrònic UAB:", key="eq_email_input", placeholder="nom.cognom@autonoma.cat")
+        email_input = st.text_input("📧 Correu Electrònic UAB / Personal:", key="eq_email_input", placeholder="nom.cognom@autonoma.cat")
     with col_acc2:
         pwd_eq_input = st.text_input("🔑 Contrasenya d'Equip:", type="password", key="eq_pwd_input")
         
     is_authenticated = False
     user_row = None
     
-    pwd_clean = pwd_eq_input.strip()
-    email_clean = email_input.strip().lower()
-    
-    def _norm_str(val):
-        s = str(val).strip()
-        if s.endswith(".0"):
-            s = s[:-2]
-        return s
+    def _norm_str(v):
+        if pd.isnull(v): return ""
+        s = str(v).strip()
+        if s.endswith(".0"): s = s[:-2]
+        return s.lower()
 
-    if pwd_clean.upper() in ["EQUIP2026", "UAB2026", "SUPERADMIN2026"]:
-        is_authenticated = True
-        if not df_passwords.empty and email_clean:
-            email_cols = [c for c in df_passwords.columns if "correu" in str(c).lower() or "email" in str(c).lower()]
-            for ec in email_cols:
-                m = df_passwords[df_passwords[ec].astype(str).str.strip().str.lower() == email_clean]
-                if not m.empty:
-                    user_row = m.iloc[0]
-                    break
-    elif pwd_clean or email_clean:
+    if email_input.strip() and pwd_eq_input.strip():
         if not df_passwords.empty:
             email_cols = [c for c in df_passwords.columns if "correu" in str(c).lower() or "email" in str(c).lower()]
-            pwd_cols = [c for c in df_passwords.columns if any(k in str(c).lower() for k in ["pass", "clau", "contra", "pwd"])]
+            col_pwd = next((c for c in df_passwords.columns if "pass" in str(c).lower() or "clau" in str(c).lower()), None)
             
-            for _, row in df_passwords.iterrows():
-                row_pwds = [_norm_str(row[pc]) for pc in pwd_cols if pd.notnull(row[pc])]
-                row_emails = [str(row[ec]).strip().lower() for ec in email_cols if pd.notnull(row[ec])]
-                
-                if pwd_clean and any(_norm_str(pwd_clean) == rp for rp in row_pwds):
-                    if email_clean:
-                        if any(email_clean == re for re in row_emails):
-                            is_authenticated = True
-                            user_row = row
-                            break
-                    else:
-                        is_authenticated = True
-                        user_row = row
-                        break
-                elif email_clean and any(email_clean == re for re in row_emails):
-                    if not pwd_clean or any(_norm_str(pwd_clean) == rp for rp in row_pwds):
-                        is_authenticated = True
-                        user_row = row
-                        break
+            for idx_r, r_p in df_passwords.iterrows():
+                match_em = any(_norm_str(r_p[ec]) == _norm_str(email_input) for ec in email_cols if pd.notnull(r_p[ec]))
+                match_pw = False
+                if col_pwd and pd.notnull(r_p[col_pwd]):
+                    match_pw = (_norm_str(r_p[col_pwd]) == _norm_str(pwd_eq_input))
+                if not match_pw and pwd_eq_input.strip().upper() in ["SUPERADMIN2026", "UAB2026", "EQUIP2026"]:
+                    match_pw = True
+                    
+                if match_em and match_pw:
+                    is_authenticated = True
+                    user_row = r_p
+                    break
 
     if not is_authenticated and (email_input != "" or pwd_eq_input != ""):
         st.error("❌ Correu o contrasenya incorrectes. Comprova les teves credencials de delegat/da o capità/a.")
@@ -1072,29 +1053,23 @@ with tab_equips:
         st.markdown("---")
         
         if not df_cal.empty:
-            esports_list = sorted(list(df_cal["Esport"].dropna().unique()))
+            sel_comp = user_comp
+            sel_equip = user_equip
             
-            c_sel1, c_sel2 = st.columns(2)
-            with c_sel1:
-                idx_comp = 0
-                if user_comp and user_comp in esports_list:
-                    idx_comp = esports_list.index(user_comp)
-                sel_comp = st.selectbox("🏆 Selecciona Competició:", esports_list, index=idx_comp, key="eq_sel_comp_box")
-                
-            with c_sel2:
-                df_cal_comp = df_cal[df_cal["Esport"] == sel_comp]
-                equips_comp = sorted(list(set(df_cal_comp["EquipLocal"].dropna().tolist() + df_cal_comp["EquipVisitant"].dropna().tolist())))
-                equips_comp = [e for e in equips_comp if e != "DESCANSA"]
-                
-                idx_eq = 0
-                if user_equip and user_equip in equips_comp:
-                    idx_eq = equips_comp.index(user_equip)
-                sel_equip = st.selectbox("⚽ Selecciona el teu Equip:", equips_comp, index=idx_eq, key="eq_sel_team_box")
-                
+            cal_esports = df_cal["Esport"].dropna().unique()
+            m_comp = next((e for e in cal_esports if e.strip().upper() == sel_comp.strip().upper()), sel_comp)
+            sel_comp = m_comp
+            
+            df_cal_comp = df_cal[df_cal["Esport"].astype(str).str.strip().str.upper() == sel_comp.strip().upper()]
+            
+            cal_equips = set(df_cal_comp["EquipLocal"].dropna().tolist() + df_cal_comp["EquipVisitant"].dropna().tolist())
+            m_eq = next((eq for eq in cal_equips if eq.strip().upper() == sel_equip.strip().upper()), sel_equip)
+            sel_equip = m_eq
+            
             if user_nom:
-                st.success(f"Sessió Iniciada: **{user_nom}** ({user_rol} de **{sel_equip}**) ⚽")
+                st.success(f"Sessió Iniciada: **{user_nom}** ({user_rol} de **{sel_equip}**) ⚽ | **Competició:** {sel_comp}")
             else:
-                st.success(f"Sessió Iniciada per a l'equip **{sel_equip}** ({sel_comp}) ⚽")
+                st.success(f"Sessió Iniciada per a l'equip **{sel_equip}** (Competició: **{sel_comp}**) ⚽")
                 
             st.markdown("---")
             st.markdown(f"### 📊 Panell de Control i Rendiment — **{sel_equip}**")
