@@ -721,8 +721,8 @@ with tab_public:
             
             standings = []
             for t in teams:
-                df_home = df_filtrat[(df_filtrat["EquipLocal"] == t) & (df_filtrat["EstatPartit"].astype(str).str.strip().str.upper().isin(["JUGAT", "VALIDAT"]))]
-                df_away = df_filtrat[(df_filtrat["EquipVisitant"] == t) & (df_filtrat["EstatPartit"].astype(str).str.strip().str.upper().isin(["JUGAT", "VALIDAT"]))]
+                df_home = df_filtrat[(df_filtrat["EquipLocal"] == t) & (df_filtrat["EstatPartit"].astype(str).str.strip().str.upper().isin(["JUGAT", "VALIDAT", "WO LOCAL", "WO VISITANT", "WO"]))]
+                df_away = df_filtrat[(df_filtrat["EquipVisitant"] == t) & (df_filtrat["EstatPartit"].astype(str).str.strip().str.upper().isin(["JUGAT", "VALIDAT", "WO LOCAL", "WO VISITANT", "WO"]))]
                 
                 pj = len(df_home) + len(df_away)
                 pg, pe, pp, gf, gc = 0, 0, 0, 0, 0
@@ -758,7 +758,7 @@ with tab_public:
                 
             # Pitxitxis
             dict_goals = {}
-            df_validats = df_filtrat[df_filtrat["EstatPartit"].astype(str).str.strip().str.upper().isin(["JUGAT", "VALIDAT"])]
+            df_validats = df_filtrat[df_filtrat["EstatPartit"].astype(str).str.strip().str.upper().isin(["JUGAT", "VALIDAT", "WO LOCAL", "WO VISITANT", "WO"])]
             
             col_gl_name = None
             col_gv_name = None
@@ -1086,11 +1086,13 @@ with tab_arbitre:
                     cs1, cs2 = st.columns([1, 1])
                     with cs1:
                         OPCIONS_ESTAT_PARTIT = ["VALIDAT", "Ajornat", "BAIXA", "Programat", "Pendent", "Cancel·lat", "WO Local", "WO Visitant"]
+                        # Si el partit està Pendent o Programat, per defecte es proposa "VALIDAT" (índex 0) al desar el resultat
                         idx_def_estat = 0
-                        for i_e, opt_e in enumerate(OPCIONS_ESTAT_PARTIT):
-                            if opt_e.lower() == p_estat_actual.lower():
-                                idx_def_estat = i_e
-                                break
+                        if p_estat_actual.lower() not in ["pendent", "programat"]:
+                            for i_e, opt_e in enumerate(OPCIONS_ESTAT_PARTIT):
+                                if opt_e.lower() == p_estat_actual.lower():
+                                    idx_def_estat = i_e
+                                    break
                         
                         nou_estat_partit = st.selectbox(
                             "📌 Modificar Estat del Partit:",
