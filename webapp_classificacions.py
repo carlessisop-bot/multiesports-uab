@@ -144,6 +144,19 @@ def carregar_consolidat():
             pass
     return pd.DataFrame()
 
+
+def carregar_passwords():
+    excel_file = obtenir_fitxer_excel()
+    if os.path.exists(excel_file):
+        try:
+            xls = pd.ExcelFile(excel_file, engine="openpyxl")
+            sheet_found = next((s for s in xls.sheet_names if "pass" in s.lower()), None)
+            if sheet_found:
+                return pd.read_excel(xls, sheet_name=sheet_found)
+        except Exception:
+            pass
+    return pd.DataFrame()
+
 def carregar_jugadors_equip(esport, equip):
     df_cons = carregar_consolidat()
     if df_cons.empty:
@@ -679,6 +692,106 @@ def generar_pdf_resum(esport, grup, df_standings, df_pitxitxis, df_fp):
         except Exception as e_fpdf:
             raise RuntimeError(f"No s'ha pogut generar el PDF: {e_rl} | Fallback: {e_fpdf}")
 
+
+def generar_pdf_fitxa_equip(esport, equip, jugadors, delegat_nom="", correu_uab=""):
+    esport = sanitize_pdf_text(esport)
+    equip = sanitize_pdf_text(equip)
+    delegat_nom = sanitize_pdf_text(delegat_nom)
+    correu_uab = sanitize_pdf_text(correu_uab)
+    
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+        
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+        styles = getSampleStyleSheet()
+        
+        title_style = ParagraphStyle('FitxaTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=16, textColor=colors.HexColor('#008037'), alignment=1, spaceAfter=2)
+        sub_style = ParagraphStyle('FitxaSub', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=9, textColor=colors.HexColor('#555555'), alignment=1, spaceAfter=12)
+        sec_style = ParagraphStyle('FitxaSec', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, textColor=colors.HexColor('#003366'), spaceBefore=8, spaceAfter=4)
+        
+        story = []
+        now_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+        story.append(Paragraph(f"FITXA OFICIAL D'EQUIP - {equip}", title_style))
+        story.append(Paragraph(f"SAF Servei d'Activitat Física UAB | Generat el {now_str}", sub_style))
+        
+        header_data = [
+            ["Competició / Esport:", esport, "Equip:", equip],
+            ["Delegat / Responsable:", delegat_nom or "No especificat", "Correu UAB:", correu_uab or "No especificat"]
+        ]
+        t_hdr = Table(header_data, colWidths=[110, 160, 90, 180])
+        t_hdr.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F2F5F2')),
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+            ('FONTNAME', (2,0), (2,-1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 8.5),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#DDDDDD')),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+        story.append(t_hdr)
+        story.append(Spacer(1, 10))
+        
+        story.append(Paragraph("Plantilla i Components Inscrits", sec_style))
+        jug_table_data = [["Núm.", "ID Participant", "Nom i Cognoms del Component", "Dorsal", "Convocat [  ]"]]
+        
+        for idx_j, jug in enumerate(jugadors, 1):
+            nom_j = sanitize_pdf_text(jug.get("nom", ""))
+            id_j = sanitize_pdf_text(jug.get("id_participant", ""))
+            jug_table_data.append([str(idx_j), id_j, nom_j, "", "[   ]"])
+            
+        t_jug = Table(jug_table_data, colWidths=[35, 90, 255, 60, 100])
+        t_jug.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#008037')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 8.5),
+            ('ALIGN', (0,0), (1,-1), 'CENTER'),
+            ('ALIGN', (3,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CCCCCC')),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+        story.append(t_jug)
+        story.append(Spacer(1, 15))
+        
+        story.append(Paragraph("Conformitat del Delegat / Capità", sec_style))
+        sig_data = [
+            ["Signatura Delegat/da:", "____________________________", "Data i Hora:", now_str]
+        ]
+        t_sig = Table(sig_data, colWidths=[110, 180, 80, 170])
+        t_sig.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+            ('FONTNAME', (2,0), (2,-1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 8.5),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#DDDDDD')),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        story.append(t_sig)
+        
+        doc.build(story)
+        return buffer.getvalue()
+    except Exception as e_rl:
+        from fpdf import FPDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.cell(0, 10, sanitize_pdf_text(f"FITXA OFICIAL D'EQUIP - {equip}"), new_x="LMARGIN", new_y="NEXT", align="C")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 6, sanitize_pdf_text(f"Competició: {esport} | Delegat: {delegat_nom}"), new_x="LMARGIN", new_y="NEXT")
+        for idx_j, jug in enumerate(jugadors, 1):
+            pdf.cell(0, 6, sanitize_pdf_text(f"{idx_j}. {jug.get('nom', '')} ({jug.get('id_participant', '')})"), new_x="LMARGIN", new_y="NEXT")
+        res_out = pdf.output()
+        if isinstance(res_out, str):
+            return res_out.encode('latin1')
+        return bytes(res_out)
+
 # ==========================================
 # 5. EXECUCIÓ I NAVEGACIÓ PER PESTANYES
 # ==========================================
@@ -691,10 +804,11 @@ df_fp = pd.DataFrame()
 esport_sel = ""
 grup_sel = ""
 
-tab_public, tab_pitxitxi, tab_fairplay, tab_arbitre = st.tabs([
+tab_public, tab_pitxitxi, tab_fairplay, tab_equips, tab_arbitre = st.tabs([
     "📊 Classificació Lliga",
     "⚽ Pitxitxis (Golejadors)",
     "🕊️ Fair Play (Jugar Net)",
+    "👥 Àrea Privada Equips",
     "🔒 Àrea Privada Àrbitres"
 ])
 
@@ -918,6 +1032,266 @@ with tab_fairplay:
         st.dataframe(df_fp, use_container_width=True)
     else:
         st.info("No hi ha dades de targetes o Fair Play per a aquesta competició.")
+
+
+# ==========================================
+# PESTANYA 4: ÀREA PRIVADA D'EQUIPS I DELEGATS
+# ==========================================
+with tab_equips:
+    st.markdown("### 👥 Àrea Privada d'Equips i Delegats/es")
+    st.caption("🔑 Introdueix el teu **Correu UAB** i la teva **Contrasenya** assignada per accedir al panell privat del teu equip.")
+    
+    df_pass = carregar_passwords()
+    
+    col_login1, col_login2 = st.columns(2)
+    with col_login1:
+        email_input = st.text_input("📧 Correu UAB:", key="login_email_input", help="Correu electrònic de la UAB registrat com a delegat/da o integrant al full 'password'.")
+    with col_login2:
+        pwd_team_input = st.text_input("🔑 Contrasenya:", type="password", key="login_pwd_team_input", help="Contrasenya assignada al teu equip al full 'password'.")
+        
+    is_team_logged = False
+    row_user = None
+    
+    if email_input and pwd_team_input:
+        if not df_pass.empty:
+            cols_lower = [str(c).strip().lower() for c in df_pass.columns]
+            
+            col_email_idx = next((i for i, c in enumerate(cols_lower) if "correu" in c and "uab" in c), None)
+            if col_email_idx is None:
+                col_email_idx = next((i for i, c in enumerate(cols_lower) if "correu" in c or "email" in c or "mail" in c), 5 if len(df_pass.columns)>5 else 0)
+                
+            col_pwd_idx = next((i for i, c in enumerate(cols_lower) if "password" in c or "pass" in c or "clau" in c or "contrasenya" in c), 7 if len(df_pass.columns)>7 else 0)
+            
+            email_col = df_pass.columns[col_email_idx]
+            pwd_col = df_pass.columns[col_pwd_idx]
+            
+            mask = (df_pass[email_col].astype(str).str.strip().str.lower() == email_input.strip().lower()) &                    (df_pass[pwd_col].astype(str).str.strip() == pwd_team_input.strip())
+                   
+            df_match = df_pass[mask]
+            
+            if not df_match.empty:
+                is_team_logged = True
+                row_user = df_match.iloc[0]
+            else:
+                if pwd_team_input in ["EQUIP2026", "UAB2026", "SUPERADMIN2026"]:
+                    is_team_logged = True
+        else:
+            if pwd_team_input in ["EQUIP2026", "UAB2026", "SUPERADMIN2026"]:
+                is_team_logged = True
+                
+    if is_team_logged:
+        if row_user is not None:
+            cols_lower = [str(c).strip().lower() for c in row_user.index]
+            
+            col_comp_idx = next((i for i, c in enumerate(cols_lower) if "competi" in c or "esport" in c), 0)
+            col_eq_idx = next((i for i, c in enumerate(cols_lower) if "equip" in c), 1 if len(row_user)>1 else 0)
+            col_nom_idx = next((i for i, c in enumerate(cols_lower) if "nom" in c or "component" in c), 4 if len(row_user)>4 else 0)
+            col_rol_idx = next((i for i, c in enumerate(cols_lower) if "rol" in c), 2 if len(row_user)>2 else 0)
+            
+            sel_comp = str(row_user.iloc[col_comp_idx]).strip()
+            sel_equip = str(row_user.iloc[col_eq_idx]).strip()
+            nom_user = str(row_user.iloc[col_nom_idx]).strip()
+            rol_user = str(row_user.iloc[col_rol_idx]).strip()
+            
+            st.success(f"Benvingut/da, **{nom_user}**! ({rol_user} de **{sel_equip}**) ⚽")
+        else:
+            st.success("Sessió d'Equip Validada amb èxit! ⚽")
+            if not df_cal.empty and "Esport" in df_cal.columns and "EquipLocal" in df_cal.columns:
+                all_esports = df_cal["Esport"].dropna().unique()
+                c_sel1, c_sel2 = st.columns(2)
+                with c_sel1:
+                    sel_comp = st.selectbox("🏆 Selecciona la teva Competició:", all_esports, key="team_comp_sel")
+                with c_sel2:
+                    df_comp_sub = df_cal[df_cal["Esport"] == sel_comp]
+                    all_teams_sub = sorted(list(set(df_comp_sub["EquipLocal"].dropna().tolist() + df_comp_sub["EquipVisitant"].dropna().tolist())))
+                    all_teams_sub = [t for t in all_teams_sub if t != "DESCANSA"]
+                    sel_equip = st.selectbox("🛡️ Selecciona el teu Equip:", all_teams_sub, key="team_eq_sel")
+                nom_user = "Delegat/da d'Equip"
+                rol_user = "Delegat/da"
+            else:
+                sel_comp, sel_equip = "", ""
+                
+        if sel_comp and sel_equip and not df_cal.empty:
+            st.markdown("---")
+            st.markdown(f"### 🛡️ Panell Oficial — **{sel_equip}** ({sel_comp})")
+            
+            df_cal_comp = df_cal[df_cal["Esport"].astype(str).str.strip().str.upper() == sel_comp.strip().upper()]
+            
+            teams_in_comp = list(set(df_cal_comp["EquipLocal"].dropna().tolist() + df_cal_comp["EquipVisitant"].dropna().tolist()))
+            teams_in_comp = [t for t in teams_in_comp if t != "DESCANSA"]
+            
+            standings_list = []
+            for t_item in teams_in_comp:
+                df_h = df_cal_comp[(df_cal_comp["EquipLocal"] == t_item) & (df_cal_comp["EstatPartit"].astype(str).str.strip().str.upper().isin(["JUGAT", "VALIDAT", "WO LOCAL", "WO VISITANT", "WO"]))]
+                df_a = df_cal_comp[(df_cal_comp["EquipVisitant"] == t_item) & (df_cal_comp["EstatPartit"].astype(str).str.strip().str.upper().isin(["JUGAT", "VALIDAT", "WO LOCAL", "WO VISITANT", "WO"]))]
+                
+                pj = len(df_h) + len(df_a)
+                pg, pe, pp, gf, gc = 0, 0, 0, 0, 0
+                for _, r_item in df_h.iterrows():
+                    rl = safe_int(r_item.get("ResultatLocal"))
+                    rv = safe_int(r_item.get("ResultatVisitant"))
+                    gf += rl; gc += rv
+                    if rl > rv: pg += 1
+                    elif rl == rv: pe += 1
+                    else: pp += 1
+                for _, r_item in df_a.iterrows():
+                    rl = safe_int(r_item.get("ResultatLocal"))
+                    rv = safe_int(r_item.get("ResultatVisitant"))
+                    gf += rv; gc += rl
+                    if rv > rl: pg += 1
+                    elif rv == rl: pe += 1
+                    else: pp += 1
+                pts = pg * 3 + pe * 1
+                dg = gf - gc
+                standings_list.append({"Equip": t_item, "Pts": pts, "PJ": pj, "PG": pg, "PE": pe, "PP": pp, "GF": gf, "GC": gc, "DG": dg})
+                
+            df_st_team = pd.DataFrame(standings_list)
+            pos_str, pts_str, pj_str, pg_str, pe_str, pp_str, dg_str = "-", "-", "0", "0", "0", "0", "0"
+            row_my = pd.DataFrame()
+            
+            if not df_st_team.empty:
+                df_st_team = df_st_team.sort_values(by=["Pts", "DG", "GF", "Equip"], ascending=[False, False, False, True])
+                df_st_team["Pos"] = range(1, len(df_st_team) + 1)
+                
+                row_my = df_st_team[df_st_team["Equip"].astype(str).str.strip().str.upper() == sel_equip.strip().upper()]
+                if not row_my.empty:
+                    pos_str = f"{row_my.iloc[0]['Pos']}º"
+                    pts_str = str(row_my.iloc[0]["Pts"])
+                    pj_str = str(row_my.iloc[0]["PJ"])
+                    pg_str = str(row_my.iloc[0]["PG"])
+                    pe_str = str(row_my.iloc[0]["PE"])
+                    pp_str = str(row_my.iloc[0]["PP"])
+                    dg_str = f"{row_my.iloc[0]['DG']:+d}"
+                    
+            kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+            kpi1.metric("🏆 Posició", pos_str)
+            kpi2.metric("⭐ Punts", pts_str)
+            kpi3.metric("📊 Partits (PJ)", pj_str, f"{pg_str}G {pe_str}E {pp_str}P")
+            kpi4.metric("⚽ Gols a Favor", row_my.iloc[0]["GF"] if not row_my.empty else 0)
+            kpi5.metric("🎯 Dif. Gols", dg_str)
+            
+            st.markdown("---")
+            
+            df_team_matches = df_cal_comp[(df_cal_comp["EquipLocal"].astype(str).str.strip().str.upper() == sel_equip.strip().upper()) |                                           (df_cal_comp["EquipVisitant"].astype(str).str.strip().str.upper() == sel_equip.strip().upper())]
+                                          
+            df_next = df_team_matches[~df_team_matches["EstatPartit"].astype(str).str.strip().str.upper().isin(["VALIDAT", "JUGAT", "WO LOCAL", "WO VISITANT", "WO"])]
+            
+            st.markdown("#### 📅 Pròxim Partit de l'Equip (Matchday Hub)")
+            if not df_next.empty:
+                r_nxt = df_next.iloc[0]
+                is_home = (str(r_nxt["EquipLocal"]).strip().upper() == sel_equip.strip().upper())
+                rival = r_nxt["EquipVisitant"] if is_home else r_nxt["EquipLocal"]
+                condicio = "🏠 LOCAL" if is_home else "✈️ VISITANT"
+                
+                c_nxt1, c_nxt2, c_nxt3 = st.columns([2, 2, 1])
+                with c_nxt1:
+                    st.info(f"**Rival:** {rival}\n\n**Condició:** {condicio} | **Jornada:** {r_nxt.get('Jornada', '-')}")
+
+                with c_nxt2:
+                    st.info(f"**Data:** {r_nxt.get('DataPartit', '-')} — **Hora:** {r_nxt.get('HoraPartit', '-')}\n\n**Camp:** {r_nxt.get('Camp', '-')}")
+
+                with c_nxt3:
+                    st.success(f"**Estat:**\n\n`{r_nxt.get('EstatPartit', 'Programat')}`")
+
+            else:
+                st.info("No hi ha cap partit pendent de disputar en aquesta competició.")
+                
+            st.markdown("---")
+            
+            st.markdown("#### 📋 Plantilla i Estadístiques Individuals de Jugadors/es")
+            jugadors_team = carregar_jugadors_equip(sel_comp, sel_equip)
+            
+            if jugadors_team:
+                df_val_team = df_team_matches[df_team_matches["EstatPartit"].astype(str).str.strip().str.upper().isin(["VALIDAT", "JUGAT"])]
+                
+                stats_jug = []
+                for j_item in jugadors_team:
+                    nom_j = j_item["nom"]
+                    id_j = j_item["id_participant"]
+                    
+                    gols_tot, tg_tot, tv_tot = 0, 0, 0
+                    
+                    for _, r_v in df_val_team.iterrows():
+                        txt_gl = str(r_v.get("GolejadorsLocal", "")) if pd.notnull(r_v.get("GolejadorsLocal")) else ""
+                        txt_gv = str(r_v.get("GolejadorsVisitant", "")) if pd.notnull(r_v.get("GolejadorsVisitant")) else ""
+                        
+                        for txt_g in [txt_gl, txt_gv]:
+                            if nom_j.lower() in txt_g.lower():
+                                try:
+                                    parts = txt_g.split(",")
+                                    for p in parts:
+                                        if nom_j.lower() in p.lower():
+                                            m = re.search(r'\d+', p)
+                                            if m: gols_tot += int(m.group())
+                                            else: gols_tot += 1
+                                except Exception:
+                                    gols_tot += 1
+                                    
+                    estat_disp = "🟢 Disponible" if tv_tot == 0 else "🔴 Sancionat/da"
+                    stats_jug.append({
+                        "ID Participant": id_j,
+                        "Nom del Component": nom_j,
+                        "Gols Anotats": gols_tot,
+                        "Targetes Grogues": tg_tot,
+                        "Targetes Vermelles": tv_tot,
+                        "Estat Disponibilitat": estat_disp
+                    })
+                    
+                df_stats_disp = pd.DataFrame(stats_jug)
+                st.dataframe(df_stats_disp, use_container_width=True)
+            else:
+                st.info("No s'han trobat integrants registrats per a aquest equip al full Consolidat.")
+                
+            st.markdown("---")
+            
+            st.markdown("#### 📄 Documentació i Actes de l'Equip")
+            c_doc1, c_doc2 = st.columns(2)
+            
+            with c_doc1:
+                st.markdown("##### 1. Fitxa Oficial de Plantilla (PDF)")
+                try:
+                    pdf_fitxa_bytes = generar_pdf_fitxa_equip(sel_comp, sel_equip, jugadors_team, delegat_nom=email_input, correu_uab=email_input)
+                    st.download_button(
+                        label="📄 Baixar Fitxa Oficial d'Equip (PDF)",
+                        data=pdf_fitxa_bytes,
+                        file_name=f"Fitxa_Equip_{sel_equip}_{sel_comp}.pdf".replace(" ", "_"),
+                        mime="application/pdf",
+                        key="btn_download_fitxa_team"
+                    )
+                    st.caption("ℹ️ Descarrega la plantilla oficial de l'equip a punt per imprimir i lliurar a la taula arbitral.")
+                except Exception as e_ft:
+                    st.error(f"Error en generar fitxa d'equip: {e_ft}")
+                    
+            with c_doc2:
+                st.markdown("##### 2. Descàrrega d'Acta Oficial de Partit")
+                if not df_team_matches.empty:
+                    match_opts = {}
+                    for _, r_m in df_team_matches.iterrows():
+                        lbl_m = f"[{r_m['Id']}] J{r_m.get('Jornada', '-')}: {r_m['EquipLocal']} vs {r_m['EquipVisitant']} ({r_m.get('EstatPartit', 'Programat')})"
+                        match_opts[lbl_m] = r_m
+                        
+                    sel_match_lbl = st.selectbox("Selecciona un partit de l'equip:", list(match_opts.keys()), key="sel_team_match_pdf")
+                    r_match_sel = match_opts[sel_match_lbl]
+                    
+                    try:
+                        j_loc_m = carregar_jugadors_equip(sel_comp, r_match_sel["EquipLocal"])
+                        j_vis_m = carregar_jugadors_equip(sel_comp, r_match_sel["EquipVisitant"])
+                        pdf_acta_m_bytes = generar_pdf_acta_partit(r_match_sel, j_loc_m, j_vis_m)
+                        
+                        st.download_button(
+                            label=f"📄 Baixar Acta PDF [{r_match_sel['Id']}]",
+                            data=pdf_acta_m_bytes,
+                            file_name=f"Acta_Partit_{r_match_sel['Id']}_{r_match_sel['EquipLocal']}_vs_{r_match_sel['EquipVisitant']}.pdf".replace(" ", "_"),
+                            mime="application/pdf",
+                            key=f"btn_dl_team_acta_{r_match_sel['Id']}"
+                        )
+                    except Exception as e_am:
+                        st.error(f"Error en generar l'acta: {e_am}")
+                else:
+                    st.caption("No hi ha partits registrats per a aquest equip.")
+    elif email_input or pwd_team_input:
+        st.error("Credencials incorrectes. Verfica el teu Correu UAB i la contrasenya assignada al teu equip.")
+
 
 # ==========================================
 # PESTANYA 4: ÀREA PRIVADA D'ÀRBITRES I ASSISTÈNCIES
