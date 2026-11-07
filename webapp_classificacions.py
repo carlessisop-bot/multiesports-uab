@@ -1006,29 +1006,48 @@ with tab_equips:
     is_authenticated = False
     user_row = None
     
-    if email_input.strip() and pwd_eq_input.strip():
+    pwd_clean = pwd_eq_input.strip()
+    email_clean = email_input.strip().lower()
+    
+    def _norm_str(val):
+        s = str(val).strip()
+        if s.endswith(".0"):
+            s = s[:-2]
+        return s
+
+    if pwd_clean.upper() in ["EQUIP2026", "UAB2026", "SUPERADMIN2026"]:
+        is_authenticated = True
+        if not df_passwords.empty and email_clean:
+            email_cols = [c for c in df_passwords.columns if "correu" in str(c).lower() or "email" in str(c).lower()]
+            for ec in email_cols:
+                m = df_passwords[df_passwords[ec].astype(str).str.strip().str.lower() == email_clean]
+                if not m.empty:
+                    user_row = m.iloc[0]
+                    break
+    elif pwd_clean or email_clean:
         if not df_passwords.empty:
-            col_email = next((c for c in df_passwords.columns if "correu" in str(c).lower() or "email" in str(c).lower()), None)
-            col_pwd = next((c for c in df_passwords.columns if "pass" in str(c).lower() or "clau" in str(c).lower()), None)
+            email_cols = [c for c in df_passwords.columns if "correu" in str(c).lower() or "email" in str(c).lower()]
+            pwd_cols = [c for c in df_passwords.columns if any(k in str(c).lower() for k in ["pass", "clau", "contra", "pwd"])]
             
-            if col_email and col_pwd:
-                match_mask = (df_passwords[col_email].astype(str).str.strip().str.lower() == email_input.strip().lower()) &                              (df_passwords[col_pwd].astype(str).str.strip() == pwd_eq_input.strip())
-                df_match = df_passwords[match_mask]
-                if not df_match.empty:
-                    is_authenticated = True
-                    user_row = df_match.iloc[0]
-                else:
-                    if pwd_eq_input.strip().upper() in ["EQUIP2026", "UAB2026", "SUPERADMIN2026"]:
-                        match_email = df_passwords[df_passwords[col_email].astype(str).str.strip().str.lower() == email_input.strip().lower()]
-                        if not match_email.empty:
+            for _, row in df_passwords.iterrows():
+                row_pwds = [_norm_str(row[pc]) for pc in pwd_cols if pd.notnull(row[pc])]
+                row_emails = [str(row[ec]).strip().lower() for ec in email_cols if pd.notnull(row[ec])]
+                
+                if pwd_clean and any(_norm_str(pwd_clean) == rp for rp in row_pwds):
+                    if email_clean:
+                        if any(email_clean == re for re in row_emails):
                             is_authenticated = True
-                            user_row = match_email.iloc[0]
-            else:
-                if pwd_eq_input.strip().upper() in ["EQUIP2026", "UAB2026", "SUPERADMIN2026"]:
-                    is_authenticated = True
-        else:
-            if pwd_eq_input.strip().upper() in ["EQUIP2026", "UAB2026", "SUPERADMIN2026"]:
-                is_authenticated = True
+                            user_row = row
+                            break
+                    else:
+                        is_authenticated = True
+                        user_row = row
+                        break
+                elif email_clean and any(email_clean == re for re in row_emails):
+                    if not pwd_clean or any(_norm_str(pwd_clean) == rp for rp in row_pwds):
+                        is_authenticated = True
+                        user_row = row
+                        break
 
     if not is_authenticated and (email_input != "" or pwd_eq_input != ""):
         st.error("❌ Correu o contrasenya incorrectes. Comprova les teves credencials de delegat/da o capità/a.")
