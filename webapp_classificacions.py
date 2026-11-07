@@ -982,17 +982,42 @@ with tab_arbitre:
             c_f1, c_f2 = st.columns([1, 1])
             with c_f1:
                 filtre_estat = st.radio(
-                    "Filtre de Partits:",
+                    "Filtre d'Estat de Partits:",
                     ["Només Pendents / No Validats", "Tots els partits del Calendari"],
                     index=0,
                     horizontal=True,
                     key="radio_filtre_partits_arb"
                 )
             
+            if "Esport" in df_cal.columns and "Grup" in df_cal.columns:
+                esports_arb = ["Totes les Competicions"] + list(df_cal["Esport"].dropna().unique())
+                
+                col_a1, col_a2 = st.columns(2)
+                with col_a1:
+                    esport_arb_sel = st.selectbox("🏆 Selecciona Competició:", esports_arb, key="arb_esp")
+                
+                if esport_arb_sel != "Totes les Competicions":
+                    df_esp_arb = df_cal[df_cal["Esport"] == esport_arb_sel]
+                    grups_arb = ["Tots els Grups"] + list(df_esp_arb["Grup"].dropna().unique())
+                else:
+                    df_esp_arb = df_cal
+                    grups_arb = ["Tots els Grups"] + list(df_cal["Grup"].dropna().unique())
+                    
+                with col_a2:
+                    grup_arb_sel = st.selectbox("👥 Selecciona Grup:", grups_arb, key="arb_grp")
+            else:
+                esport_arb_sel = "Totes les Competicions"
+                grup_arb_sel = "Tots els Grups"
+            
             if filtre_estat == "Tots els partits del Calendari":
                 df_pendents = df_cal.copy()
             else:
                 df_pendents = df_cal[~df_cal["EstatPartit"].astype(str).str.strip().str.upper().isin(["VALIDAT"])]
+                
+            if esport_arb_sel != "Totes les Competicions":
+                df_pendents = df_pendents[df_pendents["Esport"] == esport_arb_sel]
+            if grup_arb_sel != "Tots els Grups":
+                df_pendents = df_pendents[df_pendents["Grup"] == grup_arb_sel]
             
             if not df_pendents.empty:
                 partit_dict = {}
