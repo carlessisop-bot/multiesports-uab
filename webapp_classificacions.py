@@ -134,6 +134,107 @@ def carregar_calendari():
         return pd.DataFrame()
 
 
+
+def carregar_sollicituds():
+    excel_file = obtenir_fitxer_excel()
+    if os.path.exists(excel_file):
+        try:
+            xls = pd.ExcelFile(excel_file, engine="openpyxl")
+            for sheet in xls.sheet_names:
+                if "sollicitud" in sheet.lower() or "canvi" in sheet.lower() or "ajorn" in sheet.lower():
+                    return pd.read_excel(xls, sheet_name=sheet)
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+def guardar_nova_sollicitud(id_partit, esport, grup, equip_sol, equip_riv, nova_data, nova_hora, motiu, estat="Pendent Rival"):
+    excel_file = obtenir_fitxer_excel()
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(excel_file, keep_vba=excel_file.lower().endswith('.xlsm'))
+        
+        sheet_name = "SollicitudsCanvi"
+        ws = None
+        for s in wb.sheetnames:
+            if "sollicitud" in s.lower() or "canvi" in s.lower() or "ajorn" in s.lower():
+                ws = wb[s]
+                sheet_name = s
+                break
+        
+        headers = ["IdPartit", "Esport", "Grup", "EquipSollicitant", "EquipRival", "NovaDataProposada", "NovaHoraProposada", "Motiu", "EstatSollicitud", "DataRegistre"]
+        if ws is None:
+            ws = wb.create_sheet(sheet_name)
+            for c_idx, h in enumerate(headers, 1):
+                ws.cell(row=1, column=c_idx, value=h)
+        
+        now_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+        
+        r_next = ws.max_row + 1
+        ws.cell(row=r_next, column=1, value=str(id_partit))
+        ws.cell(row=r_next, column=2, value=str(esport))
+        ws.cell(row=r_next, column=3, value=str(grup))
+        ws.cell(row=r_next, column=4, value=str(equip_sol))
+        ws.cell(row=r_next, column=5, value=str(equip_riv))
+        ws.cell(row=r_next, column=6, value=str(nova_data))
+        ws.cell(row=r_next, column=7, value=str(nova_hora))
+        ws.cell(row=r_next, column=8, value=str(motiu))
+        ws.cell(row=r_next, column=9, value=str(estat))
+        ws.cell(row=r_next, column=10, value=now_str)
+        
+        wb.save(excel_file)
+        return True, "Sol·licitud d'ajornament enregistrada amb èxit!"
+    except Exception as e:
+        return False, f"Error en desar la sol·licitud: {e}"
+
+def actualitzar_estat_sollicitud(id_partit, equip_sol, nou_estat, actualitzar_calendari=False, nova_data="", nova_hora=""):
+    excel_file = obtenir_fitxer_excel()
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(excel_file, keep_vba=excel_file.lower().endswith('.xlsm'))
+        
+        # 1. Actualitzar full SollicitudsCanvi
+        ws_sol = None
+        for s in wb.sheetnames:
+            if "sollicitud" in s.lower() or "canvi" in s.lower() or "ajorn" in s.lower():
+                ws_sol = wb[s]
+                break
+                
+        if ws_sol is not None:
+            for r in range(2, ws_sol.max_row + 1):
+                v_id = ws_sol.cell(row=r, column=1).value
+                v_eq = ws_sol.cell(row=r, column=4).value
+                if is_same_id(v_id, id_partit) and str(v_eq).strip().lower() == str(equip_sol).strip().lower():
+                    ws_sol.cell(row=r, column=9, value=str(nou_estat))
+                    break
+
+        # 2. Si actualitzar_calendari és True (Aprovació final SuperAdmin)
+        if actualitzar_calendari and "Calendari" in wb.sheetnames:
+            ws_cal = wb["Calendari"]
+            col_map = {}
+            for col in range(1, ws_cal.max_column + 1):
+                hdr = str(ws_cal.cell(row=1, column=col).value).strip()
+                if hdr: col_map[hdr] = col
+                
+            col_c_id = col_map.get("Id", 1)
+            col_c_estat = col_map.get("EstatPartit", 15)
+            col_c_data = col_map.get("DataPartit", 8)
+            col_c_hora = col_map.get("HoraPartit", 9)
+            
+            for row in range(2, ws_cal.max_row + 1):
+                val_id_raw = ws_cal.cell(row=row, column=col_c_id).value
+                if is_same_id(val_id_raw, id_partit):
+                    ws_cal.cell(row=row, column=col_c_estat, value="Ajornat")
+                    if nova_data and str(nova_data).strip():
+                        ws_cal.cell(row=row, column=col_c_data, value=str(nova_data).strip())
+                    if nova_hora and str(nova_hora).strip():
+                        ws_cal.cell(row=row, column=col_c_hora, value=str(nova_hora).strip())
+                    break
+
+        wb.save(excel_file)
+        return True, "Estat de la sol·licitud actualitzat correctament!"
+    except Exception as e:
+        return False, f"Error en actualitzar la sol·licitud: {e}"
+
 def carregar_passwords():
     excel_file = obtenir_fitxer_excel()
     if os.path.exists(excel_file):
@@ -1296,6 +1397,101 @@ with tab_equips:
                     except Exception as e_act_t:
                         st.error(f"Error en generar l'acta: {e_act_t}")
 
+
+            st.markdown("---")
+            
+            # 5. GESTIÓ D'AJORNAMENTS I CANVIS DE DATA
+            st.markdown("#### 📅 Gestió d'Ajornaments i Sol·licituds de Canvi de Data")
+            
+            df_sollicituds = carregar_sollicituds()
+            
+            # Recompte de partits de l'equip actualment en estat "Ajornat"
+            num_ajornats_actuals = len(df_cal_comp[(df_cal_comp["EstatPartit"].astype(str).str.strip().str.upper() == "AJORNAT") & ((df_cal_comp["EquipLocal"].astype(str).str.strip().str.upper() == sel_equip.strip().upper()) | (df_cal_comp["EquipVisitant"].astype(str).str.strip().str.upper() == sel_equip.strip().upper()))])
+            
+            if num_ajornats_actuals >= 1:
+                st.error("❌ **DENEGAT AUTOMÀTICAMENT**: El teu equip ja disposa d'1 partit 'Ajornat' en aquesta competició. Segons la normativa oficial, un equip **no pot sol·licitar un segon ajornament**.")
+            else:
+                st.success("✅ **Elegible per a ajornament**: El teu equip té 0 partits 'Ajornat' en aquesta competició.")
+                
+                st.markdown("##### 📩 Formular Sol·licitud d'Ajornament de Partit")
+                df_future_matches = df_team_matches[~df_team_matches["EstatPartit"].astype(str).str.strip().str.upper().isin(["VALIDAT", "JUGAT", "WO LOCAL", "WO VISITANT", "WO"])]
+                
+                if not df_future_matches.empty:
+                    partit_ajorn_dict = {}
+                    for _, r_aj in df_future_matches.iterrows():
+                        lbl_aj = f"[{r_aj['Id']}] J{r_aj.get('Jornada', '')}: {r_aj['EquipLocal']} vs {r_aj['EquipVisitant']} ({r_aj.get('EstatPartit', 'Programat')})"
+                        partit_ajorn_dict[lbl_aj] = r_aj
+                        
+                    with st.form("form_sollicitud_ajornament"):
+                        sel_p_aj_lbl = st.selectbox("Selecciona el partit que vols ajornar/canviar:", list(partit_ajorn_dict.keys()), key="sel_p_aj_box")
+                        c_a1, c_a2 = st.columns(2)
+                        with c_a1:
+                            nova_data_input = st.text_input("📅 Nova Data Proposada (dd/mm/yyyy):", placeholder="ex: 15/11/2026", key="txt_nova_data_aj")
+                        with c_a2:
+                            nova_hora_input = st.text_input("⏰ Nova Hora Proposada (hh:mm):", placeholder="ex: 18:30", key="txt_nova_hora_aj")
+                            
+                        motiu_input = st.text_area("📝 Motiu de la Sol·licitud d'Ajornament:", placeholder="Explica breument les causes de la sol·licitud...", key="txt_motiu_aj")
+                        
+                        btn_submit_aj = st.form_submit_button("📩 Enviar Sol·licitud d'Ajornament al Rival")
+                        
+                        if btn_submit_aj:
+                            if not nova_data_input.strip() or not nova_hora_input.strip() or not motiu_input.strip():
+                                st.error("⚠️ Si us plau, omple tots els camps (Nova Data, Nova Hora i Motiu).")
+                            else:
+                                p_row_aj = partit_ajorn_dict[sel_p_aj_lbl]
+                                p_id_aj = p_row_aj['Id']
+                                p_esp_aj = p_row_aj['Esport']
+                                p_grp_aj = p_row_aj['Grup']
+                                is_loc_aj = (str(p_row_aj['EquipLocal']).strip().upper() == sel_equip.strip().upper())
+                                equip_riv_aj = str(p_row_aj['EquipVisitant']).strip() if is_loc_aj else str(p_row_aj['EquipLocal']).strip()
+                                
+                                ok_aj, msg_aj = guardar_nova_sollicitud(p_id_aj, p_esp_aj, p_grp_aj, sel_equip, equip_riv_aj, nova_data_input, nova_hora_input, motiu_input, estat="Pendent Rival")
+                                if ok_aj:
+                                    st.success("S'ha enregistrat i enviat la sol·licitud d'ajornament a l'equip rival!")
+                                    st.rerun()
+                                else:
+                                    st.error(msg_aj)
+                else:
+                    st.info("No hi ha cap partit futur pendent per sol·licitar un ajornament.")
+                    
+            if not df_sollicituds.empty:
+                # 1. Sol·licituds Rebudes com a Rival
+                mask_reb = (df_sollicituds["EquipRival"].astype(str).str.strip().str.upper() == sel_equip.strip().upper()) & \
+                           (df_sollicituds["EstatSollicitud"].astype(str).str.strip().str.upper() == "PENDENT RIVAL")
+                df_reb = df_sollicituds[mask_reb]
+                
+                if not df_reb.empty:
+                    st.markdown("---")
+                    st.markdown("##### ⚠️ Sol·licituds d'Ajornament Rebudes d'Equips Rivals (Pendent de Resposta)")
+                    for idx_r, row_r in df_reb.iterrows():
+                        with st.container():
+                            st.warning(f"**Partit [{row_r.get('IdPartit', '')}]** — L'equip **{row_r.get('EquipSollicitant', '')}** sol·licita un ajornament.\n\n"
+                                       f"📅 **Nova Data Proposada:** {row_r.get('NovaDataProposada', '')} a les {row_r.get('NovaHoraProposada', '')}\n\n"
+                                       f"📝 **Motiu:** {row_r.get('Motiu', '')}")
+                            c_btn1, c_btn2 = st.columns(2)
+                            with c_btn1:
+                                if st.button(f"✅ Acceptar Canvi [{row_r.get('IdPartit')}]", key=f"btn_acc_sol_{idx_r}"):
+                                    ok_ac, msg_ac = actualitzar_estat_sollicitud(row_r.get('IdPartit'), row_r.get('EquipSollicitant'), "Aprovat Rival - Pendent Organització")
+                                    if ok_ac:
+                                        st.success("Heu acceptat la sol·licitud! Ha passat a la direcció/àrbitres per a la seva validació final.")
+                                        st.rerun()
+                            with c_btn2:
+                                if st.button(f"❌ Denegar Canvi [{row_r.get('IdPartit')}]", key=f"btn_den_sol_{idx_r}"):
+                                    ok_dn, msg_dn = actualitzar_estat_sollicitud(row_r.get('IdPartit'), row_r.get('EquipSollicitant'), "Denegat pel Rival")
+                                    if ok_dn:
+                                        st.info("Heu rebutjat la sol·licitud d'ajornament.")
+                                        st.rerun()
+                                        
+                # 2. Històrial de Sol·licituds
+                mask_hist = (df_sollicituds["EquipSollicitant"].astype(str).str.strip().str.upper() == sel_equip.strip().upper()) | \
+                            (df_sollicituds["EquipRival"].astype(str).str.strip().str.upper() == sel_equip.strip().upper())
+                df_hist = df_sollicituds[mask_hist]
+                if not df_hist.empty:
+                    st.markdown("---")
+                    st.markdown("##### 📜 Històrial de Sol·licituds d'Ajornament de l'Equip")
+                    st.dataframe(df_hist, use_container_width=True)
+
+
 with tab_arbitre:
     st.markdown("### 🔐 Accés Restringit per a Àrbitres i Organització")
     
@@ -1573,5 +1769,54 @@ with tab_arbitre:
                             st.error(msg)
             else:
                 st.info("Tots els partits programats ja estan validats!")
+    
+        # -------------------------------------------------------------
+        # SECCIÓ DE GESTIÓ I VALIDACIÓ D'AJORNAMENTS
+        # -------------------------------------------------------------
+        st.markdown("---")
+        st.markdown("#### 5. Gestió & Validació de Sol·licituds d'Ajornament (Organització)")
+        
+        df_sol_adm = carregar_sollicituds()
+        if not df_sol_adm.empty:
+            st.dataframe(df_sol_adm, use_container_width=True)
+            
+            mask_adm_pend = df_sol_adm["EstatSollicitud"].astype(str).str.strip().str.upper().isin(["APROVAT RIVAL - PENDENT ORGANITZACIÓ", "PENDENT RIVAL", "PENDENT ORGANITZACIÓ"])
+            df_adm_pend = df_sol_adm[mask_adm_pend]
+            
+            if not df_adm_pend.empty:
+                sol_dict = {}
+                for _, r_sol in df_adm_pend.iterrows():
+                    lbl_sol = f"[{r_sol['IdPartit']}] ({r_sol['EstatSollicitud']}) {r_sol['EquipSollicitant']} vs {r_sol['EquipRival']} -> {r_sol['NovaDataProposada']} {r_sol['NovaHoraProposada']}"
+                    sol_dict[lbl_sol] = r_sol
+                    
+                sel_sol_lbl = st.selectbox("Selecciona Sol·licitud a Comprovar / Validar:", list(sol_dict.keys()), key="sel_sol_adm_box")
+                r_sol_sel = sol_dict[sel_sol_lbl]
+                
+                c_adm_b1, c_adm_b2 = st.columns(2)
+                with c_adm_b1:
+                    if st.button("💾 Aprovar, Modificar Calendari i Marcar 'Ajornat'", key=f"btn_adm_app_sol_{r_sol_sel['IdPartit']}"):
+                        ok_app, msg_app = actualitzar_estat_sollicitud(
+                            r_sol_sel['IdPartit'], r_sol_sel['EquipSollicitant'], "VALIDAT SuperAdmin",
+                            actualitzar_calendari=True, nova_data=r_sol_sel.get('NovaDataProposada', ''), nova_hora=r_sol_sel.get('NovaHoraProposada', '')
+                        )
+                        if ok_app:
+                            st.success(f"Sol·licitud del partit [{r_sol_sel['IdPartit']}] validada! El partit s'ha marcat com a 'Ajornat' al Calendari Excel.")
+                            st.rerun()
+                        else:
+                            st.error(msg_app)
+                            
+                with c_adm_b2:
+                    if st.button("❌ Denegar Sol·licitud", key=f"btn_adm_den_sol_{r_sol_sel['IdPartit']}"):
+                        ok_den, msg_den = actualitzar_estat_sollicitud(
+                            r_sol_sel['IdPartit'], r_sol_sel['EquipSollicitant'], "DENEGAT SuperAdmin", actualitzar_calendari=False
+                        )
+                        if ok_den:
+                            st.info(f"Sol·licitud del partit [{r_sol_sel['IdPartit']}] denegada.")
+                            st.rerun()
+                        else:
+                            st.error(msg_den)
+        else:
+            st.info("No hi ha cap sol·licitud d'ajornament enregistrada a la base de dades.")
+
     elif pwd_input != "":
         st.error("Contrasenya incorrecta. Revisa les teves credencials d'àrbitre.")
